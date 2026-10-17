@@ -7,6 +7,8 @@ license = "Apache-2.0"
 authors = [{ name = "Shubham Dubey", email = "itzshubhamofficial@gmail.com" }]
 requires-python = ">=3.13,<3.14"
 dependencies = [
+    "fastapi>=0.143.3",
+    "httpx>=0.28.1",
     "networkx>=3.7",
     "neuro-san==0.7.12",
     "pydantic>=2.14.1",
@@ -15,6 +17,7 @@ dependencies = [
     "rich>=15.0.0",
     "structlog>=26.1.0",
     "typer>=0.27.3",
+    "uvicorn>=0.30",
 ]
 
 [build-system]

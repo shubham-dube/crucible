@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from crucible.domain.findings import Finding, dedupe_findings, sort_findings
 from crucible.domain.network import NetworkGraph
 from crucible.domain.scenario import Scenario
-from crucible.domain.trace import RunBatch
+from crucible.domain.trace import RunBatch, SensitiveValue
 from crucible.judges import Budgets, JudgeContext, JudgeRegistry, judge_registry
 
 
@@ -31,8 +31,27 @@ def judge_batch(
             if j.id in disabled:
                 continue
             run_findings.extend(f for f in j.judge(run, ctx) if f.rule_id not in disabled)
-        findings.extend(fold_symptoms(run_findings))
+        findings.extend(redact(f, run.sensitive) for f in fold_symptoms(run_findings))
     return findings
+
+
+def redact(finding: Finding, sensitive: Sequence[SensitiveValue]) -> Finding:
+    """Mask every tracked secret in a finding's text: findings end up in reports, PR comments and APIs."""
+    secrets = sorted({s.value for s in sensitive if s.value}, key=len, reverse=True)
+    if not secrets:
+        return finding
+
+    def scrub(text: str | None) -> str | None:
+        if text is None:
+            return None
+        for secret in secrets:
+            text = text.replace(secret, "[REDACTED]")
+        return text
+
+    evidence = tuple(e.model_copy(update={"excerpt": scrub(e.excerpt)}) for e in finding.evidence)
+    return finding.model_copy(
+        update={"message": scrub(finding.message), "remediation": scrub(finding.remediation), "evidence": evidence}
+    )
 
 
 def fold_symptoms(findings: list[Finding]) -> list[Finding]:

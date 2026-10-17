@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -11,7 +11,7 @@ from crucible.config.project import TargetSpec
 from crucible.domain.audit import TargetAudit
 from crucible.domain.errors import CrucibleError
 from crucible.domain.findings import Finding, Severity
-from crucible.domain.trace import SpanKind
+from crucible.domain.trace import RunResult, SpanKind
 from crucible.execution.runner import new_id
 from crucible.regression.diff import RegressionDiff, diff
 from crucible.services.audit import AuditOptions, AuditService
@@ -80,6 +80,7 @@ def run_gate(
     gate: GateOptions,
     repo: AuditRepository,
     store: FileRunStore,
+    on_result: Callable[[RunResult], None] | None = None,
 ) -> GateResult:
     """Audit each target; with a baseline only NEW findings (or metric regressions) fail the gate."""
     result = GateResult()
@@ -87,7 +88,7 @@ def run_gate(
         load_baseline_file(Path(gate.baseline)) if gate.baseline and gate.baseline.endswith(".json") else None
     )
     for spec in specs:
-        audit = service.audit_target(spec, audit_options)
+        audit = service.audit_target(spec, audit_options, on_result=on_result)
         audit_id = new_id("audit")
         result.audits[spec.name] = audit
         if gate.save:

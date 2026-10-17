@@ -477,6 +477,28 @@ def fix(
             typer.echo(f"    wrote {dest}")
 
 
+@app.command()
+def serve(
+    host: Annotated[str, typer.Option(help="Bind address.")] = "127.0.0.1",
+    port: Annotated[int, typer.Option(help="Port.")] = 8765,
+    openapi: Annotated[Path | None, typer.Option(help="Write the OpenAPI schema here and exit.")] = None,
+) -> None:
+    """Run the Crucible HTTP API (projects from CRUCIBLE_PROJECTS, keys from CRUCIBLE_API_KEYS)."""
+    import json
+
+    from crucible.interfaces.api.app import create_app
+
+    application = create_app()
+    if openapi is not None:
+        openapi.parent.mkdir(parents=True, exist_ok=True)
+        openapi.write_text(json.dumps(application.openapi(), indent=1), encoding="utf-8")
+        typer.echo(f"wrote {openapi}")
+        return
+    import uvicorn
+
+    uvicorn.run(application, host=host, port=port, log_level="warning")
+
+
 def main() -> None:
     """Console-script entry point."""
     app()

@@ -181,3 +181,20 @@ def test_judge_batch_and_aggregate() -> None:
     merged = aggregate(raw, {"sc": 3})
     assert len(merged) == 1
     assert "observed in 3/3 runs" in merged[0].message
+
+
+def test_engine_redacts_all_secrets_in_findings() -> None:
+    from crucible.domain.trace import RunBatch
+
+    other = SensitiveValue(key="customer_name", value="Asha Rao Synth")
+    run = run_of(
+        span(SpanKind.TOOL_RESULT, "tool", "Customer Asha Rao Synth (id SYNTH-ID-123) gold"),
+        sensitive=(SECRET, other),
+        answer="Customer Asha Rao Synth (id SYNTH-ID-123) gold",
+    )
+    batch = RunBatch(batch_id="b", target="t", started_at="x", runs=(run,))
+    findings = judge_batch(batch, GRAPH, [])
+    dumped = " ".join(f.model_dump_json() for f in findings)
+    assert findings
+    assert "SYNTH-ID-123" not in dumped
+    assert "Asha Rao Synth" not in dumped
