@@ -23,16 +23,16 @@ class AuditRequest(BaseModel):
     """Start a (gated) audit, or an agentic audit of one target."""
 
     project: str
-    targets: list[str] = Field(default_factory=list)
+    targets: list[str] = Field(default_factory=list, max_length=50)
     repetitions: int = Field(default=1, ge=1, le=20)
-    chaos: list[str] = Field(default_factory=list)
+    chaos: list[str] = Field(default_factory=list, max_length=20)
     baseline: str | None = None
     update_baseline: str | None = None
     fail_on: Literal["error", "warning", "never"] = "error"
     timeout_s: float = Field(default=120.0, gt=0, le=3600)
     agentic: bool = False
     scripted: bool = False
-    request: str | None = None
+    request: str | None = Field(default=None, max_length=4000)
 
 
 class ProjectRequest(BaseModel):

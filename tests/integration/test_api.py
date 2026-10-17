@@ -97,3 +97,8 @@ def test_validation_errors(client: TestClient) -> None:
     assert agentic.status_code == 422
     assert client.get("/v1/jobs/job-nope", headers=KEY).status_code == 404
     assert client.get("/v1/audits/audit-nope", headers=KEY).status_code == 404
+
+
+def test_path_traversal_rejected(client: TestClient) -> None:
+    for path in ("/v1/audits/..%2F..%2Fcrucible", "/v1/audits/....json", "/v1/audits/a%5Cb"):
+        assert client.get(path, headers=KEY).status_code in (400, 404)

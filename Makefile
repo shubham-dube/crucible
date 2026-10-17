@@ -1,4 +1,4 @@
-.PHONY: install lint fmt type test test-all check
+.PHONY: install lint fmt type test test-e2e test-all check
 
 install:
 	uv sync
@@ -15,7 +15,10 @@ type:
 	uv run mypy
 
 test:
-	uv run pytest -m "not live"
+	uv run pytest -m "not live and not e2e"
+
+test-e2e:
+	uv run pytest -m e2e
 
 test-all:
 	uv run pytest

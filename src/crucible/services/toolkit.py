@@ -65,7 +65,9 @@ def _project(project_dir: str) -> Project:
 
 def generated_suite_path(target: str) -> Path:
     """Where agent-designed scenarios for a target are stored."""
-    return _home() / "generated" / f"{target}.yaml"
+    from crucible.storage.ids import safe_id
+
+    return _home() / "generated" / f"{safe_id(target, 'target')}.yaml"
 
 
 def load_generated(target: str) -> ScenarioSuite:

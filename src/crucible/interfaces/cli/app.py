@@ -499,6 +499,28 @@ def serve(
     uvicorn.run(application, host=host, port=port, log_level="warning")
 
 
+@app.command("mcp-server")
+def mcp_server(
+    project_dir: Annotated[Path, typer.Argument(help="Directory containing crucible.yaml.", exists=True)],
+    target: Annotated[str, typer.Option("--target", "-t", help="Target network the MCP tool audits.")],
+    port: Annotated[int, typer.Option(help="Neuro-SAN HTTP port (MCP at POST /mcp).")] = 8080,
+    scripted: Annotated[bool, typer.Option(help="Keyless deterministic agents (demo/CI).")] = False,
+) -> None:
+    """Serve Crucible's agent network as an MCP tool ('crucible') via Neuro-SAN's server."""
+    import subprocess
+
+    from crucible.config import get_settings
+    from crucible.services.mcp_server import prepare, server_command
+
+    try:
+        env = prepare(Path(get_settings().home).resolve(), project_dir, target, scripted)
+    except CrucibleError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+    typer.echo(f"MCP tool 'crucible' for target '{target}' at http://127.0.0.1:{port}/mcp", err=True)
+    raise typer.Exit(subprocess.call(server_command(port), env=env))
+
+
 def main() -> None:
     """Console-script entry point."""
     app()

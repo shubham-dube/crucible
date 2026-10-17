@@ -6,6 +6,7 @@ from pathlib import Path
 
 from crucible.domain.errors import CrucibleError
 from crucible.domain.trace import RunBatch
+from crucible.storage.ids import safe_id
 
 
 class FileRunStore:
@@ -16,7 +17,7 @@ class FileRunStore:
 
     def save(self, batch: RunBatch) -> Path:
         """Write a batch; returns its directory."""
-        directory = self.root / batch.batch_id
+        directory = self.root / safe_id(batch.batch_id, "batch")
         directory.mkdir(parents=True, exist_ok=True)
         tmp = directory / "batch.json.tmp"
         tmp.write_text(batch.model_dump_json(indent=1), encoding="utf-8")
@@ -25,7 +26,7 @@ class FileRunStore:
 
     def load(self, batch_id: str) -> RunBatch:
         """Read a batch by id."""
-        path = self.root / batch_id / "batch.json"
+        path = self.root / safe_id(batch_id, "batch") / "batch.json"
         if not path.is_file():
             raise CrucibleError(f"unknown batch '{batch_id}' in {self.root}")
         return RunBatch.model_validate_json(path.read_text(encoding="utf-8"))

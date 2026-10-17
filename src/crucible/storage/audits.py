@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict
 
 from crucible.domain.audit import TargetAudit
 from crucible.domain.errors import CrucibleError
+from crucible.storage.ids import safe_id
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS audits (
@@ -107,6 +108,7 @@ class SqliteAuditRepository:
             conn.close()
 
     def save(self, audit_id: str, audit: TargetAudit) -> None:
+        safe_id(audit_id, "audit")
         tmp = self.blobs / f"{audit_id}.json.tmp"
         tmp.write_text(audit.model_dump_json(), encoding="utf-8")
         tmp.replace(self.blobs / f"{audit_id}.json")
@@ -135,6 +137,7 @@ class SqliteAuditRepository:
             )
 
     def get(self, audit_id: str) -> TargetAudit:
+        safe_id(audit_id, "audit")
         path = self.blobs / f"{audit_id}.json"
         if not path.is_file():
             raise CrucibleError(f"unknown audit '{audit_id}' in {self.home}")

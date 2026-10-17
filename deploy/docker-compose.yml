@@ -1,0 +1,27 @@
+# docker compose -f deploy/docker-compose.yml --env-file .env up --build
+# .env: CRUCIBLE_API_KEYS=<long random key>, ANTHROPIC_API_KEY=..., GOOGLE_API_KEY=...
+services:
+  api:
+    build: { context: .., dockerfile: deploy/Dockerfile.api }
+    environment:
+      CRUCIBLE_API_KEYS: ${CRUCIBLE_API_KEYS:?set CRUCIBLE_API_KEYS}
+      CRUCIBLE_CORS_ORIGINS: ${CRUCIBLE_CORS_ORIGINS:-http://localhost:3000}
+      CRUCIBLE_PROJECTS: ${CRUCIBLE_PROJECTS:-zoo=/app/examples/targets}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+    volumes:
+      - crucible-data:/data
+      # - ../my-agents:/projects/my-agents:ro   # mount your own projects, then add them to CRUCIBLE_PROJECTS
+    ports: ["8765:8765"]
+    restart: unless-stopped
+  web:
+    build: { context: .., dockerfile: deploy/Dockerfile.web }
+    environment:
+      CRUCIBLE_API_URL: http://api:8765
+      CRUCIBLE_API_KEY: ${CRUCIBLE_API_KEYS:?set CRUCIBLE_API_KEYS}
+    ports: ["3000:3000"]
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+volumes:
+  crucible-data:

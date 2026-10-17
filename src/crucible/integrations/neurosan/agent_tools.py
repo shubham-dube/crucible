@@ -7,6 +7,7 @@ Thin adapters: read ``project_dir``/``target`` from sly_data (so the LLM never h
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from neuro_san.interfaces.coded_tool import CodedTool
@@ -19,8 +20,9 @@ REPORT_KEY = "crucible_report"
 
 
 def _ctx(args: dict[str, Any], sly_data: dict[str, Any]) -> tuple[str, str]:
-    project_dir = sly_data.get("project_dir")
-    target = args.get("target") or sly_data.get("target")
+    # sly_data when run by `crucible audit --agentic`; env when served as an MCP tool (MCP calls carry no sly_data).
+    project_dir = sly_data.get("project_dir") or os.environ.get("CRUCIBLE_PROJECT_DIR")
+    target = args.get("target") or sly_data.get("target") or os.environ.get("CRUCIBLE_TARGET")
     if not project_dir or not target:
         raise CrucibleError("sly_data must provide 'project_dir' and a 'target' (or pass target)")
     return str(project_dir), str(target)
