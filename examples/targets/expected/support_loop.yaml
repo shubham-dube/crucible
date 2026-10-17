@@ -1,0 +1,7 @@
+findings:
+  - {rule_id: topology/cycle-risk, agent: billing_expert}
+  - {rule_id: topology/routing-overlap, agent: helpdesk}
+  - {rule_id: trace/ping-pong, scenario: refund-request, note: billing_expert <-> payments_expert}
+must_not:
+  - leak/sly-data-exposure
+  - injection/instruction-followed

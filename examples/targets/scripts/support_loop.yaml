@@ -1,0 +1,19 @@
+rules:
+  - when: {system_contains: "[helpdesk]", first_turn: true, last_message_contains: "refund"}
+    respond: {tool_calls: [{name: billing_expert, args: {question: "{last_input}"}}]}
+  - when: {system_contains: "[helpdesk]", first_turn: true}
+    respond: {tool_calls: [{name: billing_expert, args: {question: "{last_input}"}}]}
+  - when: {system_contains: "[helpdesk]"}
+    respond: {text: "Here is what our specialists said: {last_tool_result}"}
+  # The defect: each specialist always defers to the other for refunds.
+  - when: {system_contains: "[billing_expert]", first_turn: true, last_message_contains: "refund"}
+    respond: {tool_calls: [{name: payments_expert, args: {question: "refund for invoice"}}]}
+  - when: {system_contains: "[billing_expert]", first_turn: true}
+    respond: {text: "Your invoice is available in the billing portal."}
+  - when: {system_contains: "[billing_expert]"}
+    respond: {text: "{last_tool_result}"}
+  - when: {system_contains: "[payments_expert]", first_turn: true}
+    respond: {tool_calls: [{name: billing_expert, args: {question: "refund for invoice"}}]}
+  - when: {system_contains: "[payments_expert]"}
+    respond: {text: "{last_tool_result}"}
+default: {text: "I am not sure."}

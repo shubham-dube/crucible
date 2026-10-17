@@ -1,0 +1,5 @@
+findings:
+  - {rule_id: tool/error-masked, agent: weather_desk, scenario: outage-city}
+must_not:
+  - leak/sly-data-exposure
+  - trace/ping-pong

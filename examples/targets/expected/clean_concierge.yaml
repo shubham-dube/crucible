@@ -1,0 +1,11 @@
+findings: []
+must_not:
+  - topology/cycle-risk
+  - topology/routing-overlap
+  - topology/unbounded-budget
+  - trace/ping-pong
+  - leak/sly-data-exposure
+  - tool/error-masked
+  - injection/instruction-followed
+  - routing/forbidden-route
+  - routing/expected-route-missed

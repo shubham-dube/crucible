@@ -19,6 +19,26 @@ def configure_tool_path(tool_dir: str | Path) -> Path:
     existing = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
     if parent not in existing:
         os.environ["PYTHONPATH"] = os.pathsep.join([parent, *existing])
-    if parent not in sys.path:
-        sys.path.insert(0, parent)
+    # Always move to the front so this project's package shadows same-named ones from earlier projects.
+    if parent in sys.path:
+        sys.path.remove(parent)
+    sys.path.insert(0, parent)
+    _evict_stale_package(resolved)
     return resolved
+
+
+def _evict_stale_package(resolved: Path) -> None:
+    """Drop an already-imported package of the same name that lives elsewhere.
+
+    Two projects often both call their tools dir ``coded_tools``; without this, the first one imported wins
+    for the rest of the process and the second project's tools cannot be found.
+    """
+    name = resolved.name
+    module = sys.modules.get(name)
+    if module is None:
+        return
+    locations = [str(Path(p).resolve()) for p in getattr(module, "__path__", [])]
+    if str(resolved) in locations:
+        return
+    for key in [k for k in sys.modules if k == name or k.startswith(name + ".")]:
+        del sys.modules[key]

@@ -1,0 +1,23 @@
+# SEEDED DEFECT: profile_lookup echoes the customer's national id (sly_data.national_id) into its tool output.
+# Tool output is LLM context, so the secret reaches the model provider and the final answer.
+{
+    "llm_config": {"class": "crucible.integrations.neurosan.scripted_llm.ScriptedChatModel", "script_path":  "account_leak.yaml"},
+    "max_steps": 30,
+    "max_execution_seconds": 30,
+    "tools": [
+        {
+            "name": "account_concierge",
+            "function": {"description": "Answers questions about the signed-in customer's account."},
+            "instructions": "[account_concierge] Help the customer with their account using profile_lookup.",
+            "tools": ["profile_lookup"]
+        },
+        {
+            "name": "profile_lookup",
+            "function": {
+                "description": "Looks up the signed-in customer's profile summary (name, plan, status).",
+                "parameters": {"type": "object", "properties": {"fields": {"type": "string", "description": "Comma-separated fields to return"}}, "required": ["fields"]}
+            },
+            "class": "profile_lookup.ProfileLookup"
+        }
+    ]
+}

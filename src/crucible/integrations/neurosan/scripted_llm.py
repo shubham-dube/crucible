@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import os
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
@@ -181,6 +182,17 @@ def _fill_args(args: Any, view: _ConversationView) -> Any:
     return args
 
 
+def resolve_script_path(path: str) -> Path:
+    """Resolve a script path: absolute, relative to ``$CRUCIBLE_SCRIPT_DIR``, or relative to the cwd."""
+    candidate = Path(path)
+    if candidate.is_absolute():
+        return candidate
+    script_dir = os.environ.get("CRUCIBLE_SCRIPT_DIR")
+    if script_dir and (Path(script_dir) / candidate).is_file():
+        return Path(script_dir) / candidate
+    return candidate
+
+
 class ScriptedChatModel(BaseChatModel):
     """A LangChain chat model that replies from a deterministic script (see module docstring)."""
 
@@ -193,7 +205,7 @@ class ScriptedChatModel(BaseChatModel):
     @model_validator(mode="after")
     def _load_script(self) -> ScriptedChatModel:
         if self.script is None:
-            self.script = Script.load(self.script_path) if self.script_path else Script()
+            self.script = Script.load(resolve_script_path(self.script_path)) if self.script_path else Script()
         return self
 
     @property

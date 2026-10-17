@@ -79,3 +79,9 @@ def test_load_yaml_script(tmp_path) -> None:  # type: ignore[no-untyped-def]
     path.write_text("rules:\n  - respond: {text: hi}\n", encoding="utf-8")
 
     assert ScriptedChatModel(script_path=str(path)).invoke([HumanMessage("x")]).content == "hi"
+
+
+def test_script_dir_resolution(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    (tmp_path / "x.yaml").write_text("rules: [{respond: {text: from-dir}}]\n", encoding="utf-8")
+    monkeypatch.setenv("CRUCIBLE_SCRIPT_DIR", str(tmp_path))
+    assert ScriptedChatModel(script_path="x.yaml").invoke([HumanMessage("q")]).content == "from-dir"

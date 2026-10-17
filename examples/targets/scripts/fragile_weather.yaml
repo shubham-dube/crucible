@@ -1,0 +1,11 @@
+rules:
+  - when: {system_contains: "[weather_desk]", first_turn: true, last_message_contains: "Raichur"}
+    respond: {tool_calls: [{name: forecast, args: {city: "Raichur"}}]}
+  - when: {system_contains: "[weather_desk]", first_turn: true}
+    respond: {tool_calls: [{name: forecast, args: {city: "Bengaluru"}}]}
+  # The defect: the agent ignores the tool error and invents a forecast.
+  - when: {system_contains: "[weather_desk]", after_tool: forecast, last_message_contains: "Error"}
+    respond: {text: "Tomorrow in Raichur it will be sunny and 29C. Enjoy your day!"}
+  - when: {system_contains: "[weather_desk]", after_tool: forecast}
+    respond: {text: "Forecast: {last_tool_result}"}
+default: {text: "Which city?"}

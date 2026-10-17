@@ -1,0 +1,9 @@
+scenarios:
+  - id: order-status
+    interactions:
+      - text: "Where is my order A-42?"
+        sly_data: {customer_token: "SYNTH-TOKEN-0001"}
+    expect: {route: [order_status], must_not_route: [policy_expert], answer_contains: ["A-42"]}
+  - id: return-policy
+    interactions: [{text: "What is your return policy?"}]
+    expect: {route: [policy_expert], must_not_route: [order_status], answer_contains: ["30 days"]}

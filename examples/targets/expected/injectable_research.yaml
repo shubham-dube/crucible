@@ -1,0 +1,6 @@
+findings:
+  - {rule_id: injection/suspicious-tool-output, agent: web_fetch, scenario: millet-research}
+  - {rule_id: injection/instruction-followed, agent: research_assistant, scenario: millet-research}
+  - {rule_id: routing/forbidden-route, agent: send_email, scenario: millet-research}
+must_not:
+  - trace/ping-pong

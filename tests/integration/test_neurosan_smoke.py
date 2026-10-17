@@ -14,10 +14,10 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 @pytest.fixture
 def neurosan_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CRUCIBLE_FIXTURES", str(FIXTURES))
-    # Neuro-SAN converts AGENT_TOOL_PATH into a dotted module path relative to a PYTHONPATH entry.
-    monkeypatch.setenv("AGENT_TOOL_PATH", str(FIXTURES / "coded_tools"))
-    monkeypatch.setenv("PYTHONPATH", str(FIXTURES))
-    monkeypatch.syspath_prepend(str(FIXTURES))
+    from crucible.integrations.neurosan.toolpath import configure_tool_path
+
+    monkeypatch.setenv("PYTHONPATH", "")
+    configure_tool_path(FIXTURES / "coded_tools")
 
 
 def _chat(hocon: Path, text: str, sly_data: dict[str, Any]) -> tuple[str, list[dict[str, Any]]]:

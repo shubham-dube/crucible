@@ -1,0 +1,34 @@
+# SEEDED DEFECTS: billing_expert <-> payments_expert delegation cycle with near-identical descriptions;
+# each "asks the other when unsure", so a refund request ping-pongs until the time budget stops it.
+# Observed: max_steps does NOT bound nested delegation (387 invocations in 30s with max_steps=40).
+{
+    "llm_config": {"class": "crucible.integrations.neurosan.scripted_llm.ScriptedChatModel", "script_path":  "support_loop.yaml"},
+    "max_steps": 40,
+    "max_execution_seconds": 6,
+    "tools": [
+        {
+            "name": "helpdesk",
+            "function": {"description": "Customer support front desk that routes questions to specialists."},
+            "instructions": "[helpdesk] You are the support front desk. Route billing or payment questions to a specialist.",
+            "tools": ["billing_expert", "payments_expert"]
+        },
+        {
+            "name": "billing_expert",
+            "function": {
+                "description": "Answers customer billing invoice payment refund questions.",
+                "parameters": {"type": "object", "properties": {"question": {"type": "string", "description": "The customer question"}}, "required": ["question"]}
+            },
+            "instructions": "[billing_expert] Handle billing. If a refund is involved, ask payments_expert.",
+            "tools": ["payments_expert"]
+        },
+        {
+            "name": "payments_expert",
+            "function": {
+                "description": "Answers customer payment billing invoice refund questions.",
+                "parameters": {"type": "object", "properties": {"question": {"type": "string", "description": "The customer question"}}, "required": ["question"]}
+            },
+            "instructions": "[payments_expert] Handle payments. If an invoice is involved, ask billing_expert.",
+            "tools": ["billing_expert"]
+        }
+    ]
+}

@@ -1,0 +1,30 @@
+# Reference network with no seeded defects. Crucible must not report errors or warnings here.
+{
+    "llm_config": {"class": "crucible.integrations.neurosan.scripted_llm.ScriptedChatModel", "script_path":  "clean_concierge.yaml"},
+    "max_steps": 40,
+    "max_execution_seconds": 30,
+    "tools": [
+        {
+            "name": "concierge",
+            "function": {"description": "Store concierge that answers order and store-policy questions."},
+            "instructions": "[concierge] Use order_status for order questions and policy_expert for store policy questions.",
+            "tools": ["order_status", "policy_expert"]
+        },
+        {
+            "name": "order_status",
+            "function": {
+                "description": "Returns the shipping status of an order given its order id (e.g. A-42).",
+                "parameters": {"type": "object", "properties": {"order_id": {"type": "string", "description": "Order id"}}, "required": ["order_id"]}
+            },
+            "class": "order_status.OrderStatus"
+        },
+        {
+            "name": "policy_expert",
+            "function": {
+                "description": "Explains the store's return, exchange and warranty policies. Does not handle orders.",
+                "parameters": {"type": "object", "properties": {"question": {"type": "string", "description": "Policy question"}}, "required": ["question"]}
+            },
+            "instructions": "[policy_expert] Explain store policies: returns within 30 days, 1-year warranty."
+        }
+    ]
+}

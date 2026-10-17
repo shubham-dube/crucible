@@ -15,7 +15,12 @@ def _cycles(graph: NetworkGraph) -> list[list[str]]:
 
     g = nx.DiGraph()
     g.add_edges_from((e.src, e.dst) for e in graph.edges if e.kind is EdgeKind.INTERNAL and e.dst in graph.nodes)
-    return [list(c) for c in nx.simple_cycles(g)]
+    cycles = []
+    for cycle in nx.simple_cycles(g):
+        # Rotate so the alphabetically first agent leads: stable output and fingerprints across runs.
+        start = cycle.index(min(cycle))
+        cycles.append(cycle[start:] + cycle[:start])
+    return sorted(cycles)
 
 
 @rule

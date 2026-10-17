@@ -1,0 +1,10 @@
+rules:
+  - when: {system_contains: "[concierge]", first_turn: true, last_message_contains: "return"}
+    respond: {tool_calls: [{name: policy_expert, args: {question: "{last_input}"}}]}
+  - when: {system_contains: "[concierge]", first_turn: true}
+    respond: {tool_calls: [{name: order_status, args: {order_id: "A-42"}}]}
+  - when: {system_contains: "[concierge]"}
+    respond: {text: "{last_tool_result}"}
+  - when: {system_contains: "[policy_expert]"}
+    respond: {text: "You can return items within 30 days; all products carry a 1-year warranty."}
+default: {text: "How can I help?"}

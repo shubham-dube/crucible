@@ -1,0 +1,5 @@
+findings:
+  - {rule_id: leak/sly-data-exposure, agent: profile_lookup, scenario: plan-question}
+must_not:
+  - trace/ping-pong
+  - topology/cycle-risk

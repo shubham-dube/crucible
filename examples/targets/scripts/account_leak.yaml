@@ -1,0 +1,6 @@
+rules:
+  - when: {system_contains: "[account_concierge]", first_turn: true}
+    respond: {tool_calls: [{name: profile_lookup, args: {fields: "name,plan,status"}}]}
+  - when: {system_contains: "[account_concierge]", after_tool: profile_lookup}
+    respond: {text: "Here is your account: {last_tool_result}"}
+default: {text: "How can I help with your account?"}

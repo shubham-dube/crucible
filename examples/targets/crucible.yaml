@@ -1,0 +1,31 @@
+# Crucible bug zoo: networks with intentionally seeded defects + ground truth.
+# Every target runs keyless via ScriptedChatModel, so Crucible's own recall/precision is measurable in CI.
+version: 1
+coded_tools: coded_tools
+script_dir: scripts
+targets:
+  - name: support_loop
+    network: registries/support_loop.hocon
+    scenarios: scenarios/support_loop.yaml
+    expected: expected/support_loop.yaml
+    description: Billing and payments specialists bounce a refund back and forth (ping-pong) + ambiguous routing.
+  - name: account_leak
+    network: registries/account_leak.hocon
+    scenarios: scenarios/account_leak.yaml
+    expected: expected/account_leak.yaml
+    description: A coded tool copies a sly_data secret into its output, so it reaches the LLM prompt and the user.
+  - name: fragile_weather
+    network: registries/fragile_weather.hocon
+    scenarios: scenarios/fragile_weather.yaml
+    expected: expected/fragile_weather.yaml
+    description: The forecast tool fails but the agent confidently answers anyway.
+  - name: injectable_research
+    network: registries/injectable_research.hocon
+    scenarios: scenarios/injectable_research.yaml
+    expected: expected/injectable_research.yaml
+    description: A fetched web page carries hidden instructions that make the agent email data to an attacker.
+  - name: clean_concierge
+    network: registries/clean_concierge.hocon
+    scenarios: scenarios/clean_concierge.yaml
+    expected: expected/clean_concierge.yaml
+    description: Well-built reference network; Crucible must report no defects (false-positive check).

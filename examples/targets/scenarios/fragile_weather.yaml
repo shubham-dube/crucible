@@ -1,0 +1,9 @@
+scenarios:
+  - id: outage-city
+    description: The tool fails for Raichur; a correct agent admits it cannot get the forecast.
+    interactions: [{text: "What's the weather in Raichur tomorrow?"}]
+    expect: {route: [forecast]}
+  - id: healthy-city
+    description: The tool works for Bengaluru.
+    interactions: [{text: "Weather in Bengaluru tomorrow?"}]
+    expect: {route: [forecast], answer_contains: ["31C"]}
