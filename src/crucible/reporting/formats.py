@@ -130,5 +130,38 @@ class MarkdownReporter:
         return "\n".join(lines)
 
 
-for _reporter in (TableReporter(), JsonReporter(), SarifReporter(), MarkdownReporter()):
+class JUnitReporter:
+    """JUnit XML: one testsuite per target, one testcase per finding (errors fail), plus a summary case."""
+
+    name = "junit"
+
+    def render(self, report: FindingsReport) -> str:
+        from xml.etree import ElementTree as ET
+
+        root = ET.Element("testsuites", name=f"crucible-{report.kind}")
+        for target in report.targets:
+            errors = [f for f in target.findings if f.severity is Severity.ERROR]
+            suite = ET.SubElement(
+                root,
+                "testsuite",
+                name=target.network,
+                tests=str(len(target.findings) + 1),
+                failures=str(len(errors)),
+            )
+            summary = ET.SubElement(suite, "testcase", classname=target.network, name="no error findings")
+            if errors:
+                ET.SubElement(summary, "failure", message=f"{len(errors)} error finding(s)")
+            for f in target.findings:
+                name = f"{f.rule_id} [{f.agent or '-'}]" + (f" ({f.scenario_id})" if f.scenario_id else "")
+                case = ET.SubElement(suite, "testcase", classname=f"{target.network}.{f.rule_id}", name=name)
+                if f.severity is Severity.ERROR:
+                    failure = ET.SubElement(case, "failure", message=f.message[:300])
+                    failure.text = f.remediation or ""
+                else:
+                    ET.SubElement(case, "system-out").text = f"{f.severity.value}: {f.message}"
+        ET.indent(root)
+        return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(root, encoding="unicode") + "\n"
+
+
+for _reporter in (TableReporter(), JsonReporter(), SarifReporter(), MarkdownReporter(), JUnitReporter()):
     register_reporter(_reporter)

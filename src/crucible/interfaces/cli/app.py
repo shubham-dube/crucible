@@ -10,7 +10,7 @@ import typer
 
 from crucible import __version__
 from crucible.domain.errors import CrucibleError
-from crucible.domain.findings import Finding, Severity
+from crucible.domain.findings import Severity
 from crucible.reporting import FindingsReport, get_reporter
 from crucible.reporting.base import TargetFindings
 
@@ -146,16 +146,23 @@ def audit(
     target: Annotated[list[str] | None, typer.Option("--target", "-t", help="Target name (repeatable).")] = None,
     repetitions: Annotated[int, typer.Option("--repetitions", "-n", min=1)] = 1,
     timeout: Annotated[float, typer.Option(help="Hard timeout per run, seconds.")] = 120.0,
-    fmt: Annotated[str, typer.Option("--format", "-f", help="table | json | sarif")] = "table",
+    fmt: Annotated[str, typer.Option("--format", "-f", help="table | json | sarif | markdown | junit")] = "table",
     output: Annotated[Path | None, typer.Option("--output", "-o")] = None,
     fail_on: Annotated[FailOn, typer.Option(help="Exit 1 if findings at/above this severity.")] = FailOn.ERROR,
     max_delegations: Annotated[int, typer.Option(help="Delegation budget per run (0 = off).")] = 50,
     save: Annotated[bool, typer.Option(help="Persist audit + traces under $CRUCIBLE_HOME.")] = True,
     baseline: Annotated[
-        str | None, typer.Option(help="Compare with this baseline label; fail only on NEW findings.")
+        str | None,
+        typer.Option(help="Baseline label or baseline .json file to compare with; fail only on NEW findings."),
     ] = None,
     update_baseline: Annotated[
         str | None, typer.Option(help="After auditing, point this baseline label at the new audit.")
+    ] = None,
+    write_baseline: Annotated[
+        Path | None, typer.Option(help="Write a portable baseline file (commit it or keep it as a CI artifact).")
+    ] = None,
+    summary_file: Annotated[
+        Path | None, typer.Option(help="Write a markdown summary (findings + regression diff) for PR comments.")
     ] = None,
     agentic: Annotated[
         bool, typer.Option(help="Let Crucible's Neuro-SAN agent network plan and run the audit.")
@@ -166,10 +173,9 @@ def audit(
     """Lint, run and judge targets: static + runtime findings with trace evidence."""
     from crucible.config import get_settings
     from crucible.config.project import Project
-    from crucible.execution.runner import new_id
     from crucible.judges import Budgets
-    from crucible.regression.diff import diff
     from crucible.services.audit import AuditOptions, AuditService
+    from crucible.services.gate import GateOptions, run_gate, summary_markdown, write_baseline_file
     from crucible.storage.audits import SqliteAuditRepository
     from crucible.storage.run_store import FileRunStore
 
@@ -185,48 +191,38 @@ def audit(
             timeout_s=timeout,
             budgets=Budgets(max_delegations=max_delegations or None),
         )
-        store = FileRunStore(get_settings().home)
-        repo = SqliteAuditRepository(get_settings().home)
-        targets: list[TargetFindings] = []
-        notes: list[str] = []
-        failed = False
-        threshold = fail_on.threshold()
-        for spec in specs:
-            result = service.audit_target(spec, options)
-            audit_id = new_id("audit")
-            if save:
-                repo.save(audit_id, result)
-                if result.batch is not None:
-                    store.save(result.batch)
-                notes.append(f"{spec.name}: audit {audit_id}")
-            base_id = repo.baseline(spec.name, baseline) if baseline else None
-            if base_id is not None:
-                regression = diff(repo.get(base_id), result)
-                notes.append(regression.to_markdown())
-                failed = failed or regression.fails(threshold)
-            else:
-                if baseline:
-                    notes.append(f"{spec.name}: no baseline '{baseline}' yet; gating on all findings")
-                failed = failed or result_fails(result.findings, threshold)
-            if update_baseline and save:
-                repo.set_baseline(spec.name, update_baseline, audit_id)
-                notes.append(f"{spec.name}: baseline '{update_baseline}' -> {audit_id}")
-            targets.append(
-                TargetFindings(network=result.target, file=result.network_path, findings=tuple(result.findings))
-            )
-        emit(get_reporter(fmt).render(FindingsReport(kind="audit", targets=tuple(targets))), output)
-        for note in notes:
+        gate_result = run_gate(
+            service,
+            specs,
+            options,
+            GateOptions(fail_on.threshold(), baseline, update_baseline, save),
+            SqliteAuditRepository(get_settings().home),
+            FileRunStore(get_settings().home),
+        )
+        report = FindingsReport(
+            kind="audit",
+            targets=tuple(
+                TargetFindings(network=a.target, file=a.network_path, findings=tuple(a.findings))
+                for a in gate_result.audits.values()
+            ),
+        )
+        emit(get_reporter(fmt).render(report), output)
+        if write_baseline is not None:
+            write_baseline_file(write_baseline, gate_result.audits)
+            gate_result.notes.append(f"wrote baseline {write_baseline}")
+        if summary_file is not None:
+            summary_file.parent.mkdir(parents=True, exist_ok=True)
+            summary_file.write_text(summary_markdown(gate_result, get_reporter("markdown").render(report)), "utf-8")
+        for regression in gate_result.regressions.values():
+            typer.echo(regression.to_markdown(), err=True)
+        for note in gate_result.notes:
             typer.echo(note, err=True)
+        failed = gate_result.failed
     except CrucibleError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(2) from exc
     if failed:
         raise typer.Exit(1)
-
-
-def result_fails(findings: list[Finding], threshold: Severity | None) -> bool:
-    """Any finding at/above ``threshold``."""
-    return threshold is not None and any(f.severity.rank >= threshold.rank for f in findings)
 
 
 baseline_app = typer.Typer(help="Manage labelled baselines (e.g. 'main') per target.", no_args_is_help=True)

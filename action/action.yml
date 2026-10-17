@@ -1,0 +1,99 @@
+name: Crucible agent-network QA
+description: Lint, run, chaos-test and judge Neuro-SAN agent networks; gate PRs on NEW defects only.
+author: Shubham Dubey
+branding:
+  icon: shield
+  color: orange
+
+inputs:
+  project:
+    description: Directory containing crucible.yaml
+    required: true
+  targets:
+    description: Space-separated target names (default all targets in crucible.yaml)
+    required: false
+    default: ""
+  fail-on:
+    description: error | warning | never
+    required: false
+    default: error
+  baseline:
+    description: Baseline .json file (e.g. committed from main). Empty = gate on all findings.
+    required: false
+    default: ""
+  write-baseline:
+    description: Write a new baseline file to this path (use on main, then commit or upload it)
+    required: false
+    default: ""
+  repetitions:
+    description: Runs per scenario
+    required: false
+    default: "1"
+  comment:
+    description: Post / update a sticky PR comment with the summary (needs pull-requests write permission)
+    required: false
+    default: "true"
+  upload-sarif:
+    description: Upload SARIF to GitHub code scanning (needs security-events write permission)
+    required: false
+    default: "true"
+  python-version:
+    description: Python version
+    required: false
+    default: "3.13"
+
+outputs:
+  exit-code:
+    description: 0 = gate passed, 1 = gate failed, 2 = usage/config error
+    value: ${{ steps.audit.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v6
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Crucible
+      shell: bash
+      run: uv tool install --python "${{ inputs.python-version }}" "${{ github.action_path }}/.."
+
+    - name: Audit
+      id: audit
+      shell: bash
+      env:
+        CRUCIBLE_HOME: ${{ runner.temp }}/crucible-home
+      run: |
+        set +e
+        args=(audit "${{ inputs.project }}" --fail-on "${{ inputs.fail-on }}" -n "${{ inputs.repetitions }}"
+              --format sarif --output crucible.sarif --summary-file crucible-summary.md)
+        for t in ${{ inputs.targets }}; do args+=(--target "$t"); done
+        if [ -n "${{ inputs.baseline }}" ] && [ -f "${{ inputs.baseline }}" ]; then args+=(--baseline "${{ inputs.baseline }}"); fi
+        if [ -n "${{ inputs.write-baseline }}" ]; then args+=(--write-baseline "${{ inputs.write-baseline }}"); fi
+        crucible "${args[@]}"
+        code=$?
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+        if [ -f crucible-summary.md ]; then cat crucible-summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+        exit 0
+
+    - name: PR comment
+      if: inputs.comment == 'true' && github.event_name == 'pull_request' && hashFiles('crucible-summary.md') != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh pr comment "${{ github.event.pull_request.number }}" --body-file crucible-summary.md --edit-last \
+          || gh pr comment "${{ github.event.pull_request.number }}" --body-file crucible-summary.md \
+          || echo "::warning::could not post PR comment (missing pull-requests: write?)"
+
+    - name: Upload SARIF
+      if: inputs.upload-sarif == 'true' && hashFiles('crucible.sarif') != ''
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: crucible.sarif
+        category: crucible
+
+    - name: Gate
+      shell: bash
+      run: exit ${{ steps.audit.outputs.exit-code }}

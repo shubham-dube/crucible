@@ -1,0 +1,36 @@
+# Dogfooding: run the Crucible action on this repo's bug zoo, and check Crucible's benchmark scores.
+name: Crucible self-test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+  zoo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit the bug zoo with the Crucible action
+        id: crucible
+        uses: ./action
+        with:
+          project: examples/targets
+          # The zoo is defective on purpose: report everything, never fail this job on findings.
+          fail-on: never
+          upload-sarif: "false"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - name: Benchmark (recall/precision vs ground truth must stay at 100%)
+        run: |
+          uv sync --frozen
+          uv run crucible bench examples/targets --min-recall 1.0 --min-precision 1.0 -o bench.md
+          cat bench.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Crucible audits its own network (scripted, keyless)
+        run: uv run crucible lint src/crucible/agents/registries/crucible.hocon --fail-on warning
