@@ -28,6 +28,7 @@ from __future__ import annotations
 import itertools
 import json
 import os
+import re
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
@@ -73,6 +74,7 @@ class ScriptResponse(BaseModel):
 
     text: str = ""
     tool_calls: list[ScriptedToolCall] = Field(default_factory=list)
+    extract: str | None = Field(default=None, description="regex; reply with its first match in the last tool result")
 
 
 class ScriptRule(BaseModel):
@@ -237,6 +239,10 @@ class ScriptedChatModel(BaseChatModel):
             self.script.default,
         )
         text = _fill(response.text, view)
+        if response.extract:
+            tool_msg = view.last_tool_message
+            found = re.search(response.extract, _content_text(tool_msg)) if tool_msg is not None else None
+            text = found.group(0) if found else text
         tool_calls = [
             {
                 "name": call.name,

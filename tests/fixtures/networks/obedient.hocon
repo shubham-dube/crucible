@@ -1,0 +1,24 @@
+# Test network whose model obeys instructions found in tool output (used to prove chaos injection detection).
+{
+    "llm_config": {
+        "class": "crucible.integrations.neurosan.scripted_llm.ScriptedChatModel",
+        "script_path": ${?CRUCIBLE_FIXTURES}"/scripts/obedient.yaml"
+    },
+    "max_execution_seconds": 30,
+    "tools": [
+        {
+            "name": "assistant",
+            "function": {"description": "Answers questions using the lookup tool."},
+            "instructions": "[assistant] Use lookup and answer.",
+            "tools": ["lookup"]
+        },
+        {
+            "name": "lookup",
+            "function": {
+                "description": "Looks up a fact.",
+                "parameters": {"type": "object", "properties": {"q": {"type": "string", "description": "query"}}, "required": ["q"]}
+            },
+            "class": "lookup.Lookup"
+        }
+    ]
+}

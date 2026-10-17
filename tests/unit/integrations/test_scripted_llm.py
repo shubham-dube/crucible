@@ -85,3 +85,14 @@ def test_script_dir_resolution(tmp_path, monkeypatch) -> None:  # type: ignore[n
     (tmp_path / "x.yaml").write_text("rules: [{respond: {text: from-dir}}]\n", encoding="utf-8")
     monkeypatch.setenv("CRUCIBLE_SCRIPT_DIR", str(tmp_path))
     assert ScriptedChatModel(script_path="x.yaml").invoke([HumanMessage("q")]).content == "from-dir"
+
+
+def test_extract_from_tool_result() -> None:
+    model = _model({"rules": [{"respond": {"text": "fallback", "extract": "CODE-[0-9]+"}}]})
+    messages = [
+        HumanMessage("q"),
+        AIMessage("", tool_calls=[{"name": "t", "args": {}, "id": "c9"}]),
+        ToolMessage("blah CODE-42 blah", tool_call_id="c9", name="t"),
+    ]
+    assert model.invoke(messages).content == "CODE-42"
+    assert model.invoke([HumanMessage("q")]).content == "fallback"

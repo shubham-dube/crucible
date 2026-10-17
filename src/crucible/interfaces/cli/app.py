@@ -215,6 +215,37 @@ def bench(
         raise typer.Exit(1)
 
 
+@app.command()
+def chaos(
+    project_dir: Annotated[Path, typer.Argument(help="Directory containing crucible.yaml.", exists=True)],
+    target: Annotated[str, typer.Option("--target", "-t", help="Target name.")],
+    fault: Annotated[
+        list[str] | None,
+        typer.Option("--fault", help="Fault profile, e.g. exception:order_status (repeatable). Default: matrix."),
+    ] = None,
+    timeout: Annotated[float, typer.Option(help="Hard timeout per run, seconds.")] = 60.0,
+    output: Annotated[Path | None, typer.Option("--output", "-o", help="Write markdown here.")] = None,
+    min_resilience: Annotated[float, typer.Option(help="Exit 1 below this resilience.")] = 0.0,
+) -> None:
+    """Chaos matrix: which tool failures break the network (new findings vs. baseline)."""
+    from crucible.config.project import Project
+    from crucible.domain.chaos import parse_fault
+    from crucible.services.audit import AuditOptions, AuditService
+    from crucible.services.chaos_matrix import run_matrix
+
+    try:
+        for spec_text in fault or []:
+            parse_fault(spec_text)  # validate early
+        service = AuditService(Project.load(project_dir))
+        matrix = run_matrix(service, service.project.target(target), fault, AuditOptions(timeout_s=timeout))
+    except CrucibleError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+    emit(matrix.to_markdown(), output)
+    if matrix.resilience < min_resilience:
+        raise typer.Exit(1)
+
+
 def main() -> None:
     """Console-script entry point."""
     app()

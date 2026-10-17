@@ -9,6 +9,9 @@ from typing import Any
 
 import structlog
 
+from crucible.chaos import catalog
+from crucible.chaos import state as chaos_state
+from crucible.domain.chaos import FaultKind, parse_fault
 from crucible.domain.network import NetworkGraph
 from crucible.domain.trace import LlmCall, RunResult, RunStatus
 from crucible.execution.ports import RunRequest
@@ -44,6 +47,9 @@ class NeuroSanDirectAdapter:
         self.network_path = Path(network_path).resolve()
         self.graph = load_network(self.network_path).graph
         self.metadata = metadata or {"user_id": "crucible"}
+        from crucible.integrations.neurosan import chaos_prepper
+
+        chaos_prepper.register()  # must precede session creation; inert unless a chaos plan is active
         # Creating a DirectAgentSession costs ~3s (manifest + network load); a chat on it costs ~30ms.
         # Reuse one session (reset per turn) and drop it after a timeout or failure.
         self._session: Any = None
@@ -72,9 +78,9 @@ class NeuroSanDirectAdapter:
                 log.debug("session close failed")
 
     def run(self, request: RunRequest) -> RunResult:
-        """Run all turns of the scenario; never raises for target failures."""
+        """Run all turns of the scenario (with any requested chaos); never raises for target failures."""
         normaliser = Normaliser()
-        state: dict[str, Any] = {"error": None, "session": None}
+        state: dict[str, Any] = {"error": None}
         start = time.monotonic()
 
         def worker() -> None:
@@ -82,7 +88,6 @@ class NeuroSanDirectAdapter:
 
             try:
                 session = self._get_session()
-                state["session"] = session
                 chat_context: dict[str, Any] | None = None
                 for turn_index, turn in enumerate(request.scenario.interactions):
                     session.reset()
@@ -96,20 +101,14 @@ class NeuroSanDirectAdapter:
             except Exception as exc:  # target-side failure: report, do not raise
                 state["error"] = f"{type(exc).__name__}: {exc}"
 
-        with PromptCapture() as capture:
-            thread = threading.Thread(target=worker, name=f"crucible-run-{request.run_id}", daemon=True)
-            thread.start()
-            thread.join(request.timeout_s)
-            timed_out = thread.is_alive()
-            if timed_out:
-                # Abandon (do not close) the session: closing a DirectAgentSession shuts down executor queues that
-                # Neuro-SAN shares with sessions created afterwards (QueueShutDown in the next run). The runaway
-                # request is still bounded by the network's own max_execution_seconds, so wait (bounded) for it
-                # to drain; otherwise it interferes with the next run in this process.
-                self._session = None
-                thread.join(self._drain_seconds())
-                if thread.is_alive():
-                    log.warning("runaway request still running; later runs may be affected", run_id=request.run_id)
+        faults = [parse_fault(f) for f in request.chaos]
+        marker = catalog.new_marker() if any(f.kind is FaultKind.INJECTED_INSTRUCTION for f in faults) else None
+        plan = chaos_state.activate(faults, seed=request.run_id, marker=marker) if faults else None
+        try:
+            with PromptCapture() as capture:
+                timed_out = self._execute(worker, request)
+        finally:
+            chaos_state.deactivate()
         duration = time.monotonic() - start
         if state["error"]:
             self.invalidate()
@@ -134,4 +133,22 @@ class NeuroSanDirectAdapter:
             error=state["error"] or (f"hard timeout after {request.timeout_s}s" if timed_out else None),
             sensitive=request.sensitive,
             chaos=request.chaos,
+            chaos_fired=tuple(plan.fired) if plan is not None else (),
         )
+
+    def _execute(self, worker: Any, request: RunRequest) -> bool:
+        """Run ``worker`` on a thread under the hard timeout; returns True if it timed out."""
+        thread = threading.Thread(target=worker, name=f"crucible-run-{request.run_id}", daemon=True)
+        thread.start()
+        thread.join(request.timeout_s)
+        if not thread.is_alive():
+            return False
+        # Abandon (do not close) the session: closing a DirectAgentSession shuts down executor queues that Neuro-SAN
+        # shares with sessions created afterwards (QueueShutDown in the next run). The runaway request is still
+        # bounded by the network's own max_execution_seconds, so wait (bounded) for it to drain; otherwise it
+        # interferes with the next run in this process. See ADR 0002.
+        self._session = None
+        thread.join(self._drain_seconds())
+        if thread.is_alive():
+            log.warning("runaway request still running; later runs may be affected", run_id=request.run_id)
+        return True

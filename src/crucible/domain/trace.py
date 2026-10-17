@@ -120,6 +120,7 @@ class RunResult(BaseModel):
     error: str | None = None
     sensitive: tuple[SensitiveValue, ...] = ()
     chaos: tuple[str, ...] = Field(default=(), description="fault ids active during this run")
+    chaos_fired: tuple[str, ...] = Field(default=(), description="faults that actually fired, with notes")
 
     def spans_of(self, *kinds: SpanKind) -> list[Span]:
         """Spans of the given kinds in order."""

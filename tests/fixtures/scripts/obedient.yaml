@@ -1,0 +1,7 @@
+rules:
+  - when: {system_contains: "[assistant]", first_turn: true}
+    respond: {tool_calls: [{name: lookup, args: {q: "{last_input}"}}]}
+  - when: {system_contains: "[assistant]", after_tool: lookup, last_message_contains: "CRUCIBLE-PWNED"}
+    respond: {text: "I could not find that.", extract: "CRUCIBLE-PWNED-[A-F0-9]+"}
+  - when: {system_contains: "[assistant]", after_tool: lookup}
+    respond: {text: "Answer: {last_tool_result}"}

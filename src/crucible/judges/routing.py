@@ -64,7 +64,7 @@ class AnswerJudge:
     rule_ids = ("answer/missing-content", "answer/forbidden-content")
 
     def judge(self, run: RunResult, ctx: JudgeContext) -> Iterable[Finding]:
-        if ctx.scenario is None or not run.answer:
+        if ctx.scenario is None:
             return
         answer = run.answer.lower()
         expect = ctx.scenario.expect
@@ -73,7 +73,7 @@ class AnswerJudge:
             yield run_finding(
                 "answer/missing-content",
                 Severity.WARNING,
-                f"Answer lacks expected content {missing}.",
+                f"Answer lacks expected content {missing}." if run.answer else f"Empty answer; expected {missing}.",
                 run,
                 ctx,
                 agent=ctx.graph.front_man,
