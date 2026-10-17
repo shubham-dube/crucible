@@ -34,11 +34,12 @@ Work in this order and keep it tight:
 3. Ask test_runner to run the audit including generated scenarios.
 4. If any leak/ finding appears, ask leak_auditor to confirm and explain it.
 5. For each error-severity finding (at most 3), ask trace_judge to explain the root cause from evidence.
-6. Optionally ask chaos_engineer for a chaos matrix when the user asks about resilience.
-7. Ask report_writer to write the report, passing a 3-5 sentence executive summary.
+6. Ask regression_analyst whether anything is NEW compared with the baseline (the merge gate counts only new issues).
+7. Optionally ask chaos_engineer for a chaos matrix when the user asks about resilience.
+8. Ask report_writer to write the report, passing a 3-5 sentence executive summary.
 Finish with a short verdict: SAFE TO MERGE or NOT SAFE TO MERGE, the top issues by id, and the report path.
 {evidence_rule}""",
-            "tools": ["topology_analyst", "scenario_designer", "test_runner", "leak_auditor", "trace_judge", "chaos_engineer", "report_writer"],
+            "tools": ["topology_analyst", "scenario_designer", "test_runner", "leak_auditor", "trace_judge", "regression_analyst", "chaos_engineer", "report_writer"],
             "allow": {"to_upstream": {"sly_data": ["crucible_audits", "crucible_report"]}}
         },
         {
@@ -86,6 +87,15 @@ Submit them with save_scenarios as a JSON list following scenario_schema. If som
             },
             "instructions": "You are Crucible's trace judge. Call finding_evidence for the finding id you were given. Explain the root cause in 2-4 sentences grounded in the evidence and delegation path, and give the most specific fix (which agent, which instruction or description to change). {evidence_rule} {specialist_style}",
             "tools": ["finding_evidence"]
+        },
+        {
+            "name": "regression_analyst",
+            "function": {
+                "description": "Compares the latest audit with the target's baseline and reports new, fixed and unchanged findings plus metric regressions.",
+                "parameters": {"type": "object", "properties": {"request": {"type": "string", "description": "Baseline label to compare with (default main)"}}, "required": ["request"]}
+            },
+            "instructions": "You are Crucible's regression analyst. Call regression_diff. Say clearly whether anything is NEW versus the baseline (that decides the merge gate), what got fixed, and any metric regressions. If there is no baseline yet, say so. {evidence_rule} {specialist_style}",
+            "tools": ["regression_diff"]
         },
         {
             "name": "chaos_engineer",
@@ -145,6 +155,14 @@ Submit them with save_scenarios as a JSON list following scenario_schema. If som
             "function": {"description": "Lists sly_data leak findings of an audit with masked evidence and remediation.",
                 "parameters": {"type": "object", "properties": {"audit_id": {"type": "string", "description": "Audit id (optional; defaults to latest)"}}}},
             "class": "crucible.integrations.neurosan.agent_tools.LeakReport"
+        },
+        {
+            "name": "regression_diff",
+            "function": {"description": "Diffs an audit against a baseline label: new / fixed / persisting findings and metric regressions.",
+                "parameters": {"type": "object", "properties": {
+                    "baseline": {"type": "string", "description": "Baseline label (default main)"},
+                    "audit_id": {"type": "string", "description": "Audit id (optional; defaults to latest)"}}}},
+            "class": "crucible.integrations.neurosan.agent_tools.RegressionDiff"
         },
         {
             "name": "chaos_matrix",

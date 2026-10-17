@@ -17,15 +17,23 @@ from pydantic import ValidationError
 
 from crucible.config import get_settings
 from crucible.config.project import Project
-from crucible.domain.errors import ConfigError
+from crucible.domain.errors import ConfigError, CrucibleError
 from crucible.domain.findings import Finding
 from crucible.domain.scenario import Scenario, ScenarioSource, ScenarioSuite
 from crucible.execution.runner import Runner, new_id
 from crucible.integrations.neurosan.loader import load_network
 from crucible.services.audit import AuditOptions, AuditService, TargetAudit
+from crucible.storage.audits import SqliteAuditRepository
 from crucible.storage.run_store import FileRunStore
 
 _AUDITS: dict[str, TargetAudit] = {}
+
+
+def repository() -> SqliteAuditRepository:
+    """Audit repository for the current $CRUCIBLE_HOME."""
+    return SqliteAuditRepository(_home())
+
+
 _MAX_LISTED = 25
 
 
@@ -158,9 +166,7 @@ def run_audit(
     audit = AuditService(project).audit_target(spec, options, scenarios=scenarios)
     audit_id = new_id("audit")
     _AUDITS[audit_id] = audit
-    directory = _home() / "audits"
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / f"{audit_id}.json").write_text(audit.model_dump_json(), encoding="utf-8")
+    repository().save(audit_id, audit)
     if audit.batch is not None:
         FileRunStore(_home()).save(audit.batch)
     return {
@@ -178,12 +184,31 @@ def get_audit(audit_id: str) -> TargetAudit:
     """Cached or persisted audit by id."""
     if audit_id in _AUDITS:
         return _AUDITS[audit_id]
-    path = _home() / "audits" / f"{audit_id}.json"
-    if not path.is_file():
-        raise ConfigError(f"unknown audit '{audit_id}'")
-    audit = TargetAudit.model_validate_json(path.read_text(encoding="utf-8"))
+    try:
+        audit = repository().get(audit_id)
+    except CrucibleError as exc:
+        raise ConfigError(f"unknown audit '{audit_id}'") from exc
     _AUDITS[audit_id] = audit
     return audit
+
+
+def regression_diff(audit_id: str, label: str = "main") -> dict[str, Any]:
+    """Compare an audit with the target's baseline ``label``."""
+    from crucible.regression.diff import diff
+
+    audit = get_audit(audit_id)
+    baseline_id = repository().baseline(audit.target, label)
+    if baseline_id is None:
+        return {"audit_id": audit_id, "baseline": None, "note": f"no baseline '{label}' for {audit.target}"}
+    result = diff(get_audit(baseline_id), audit)
+    return {
+        "audit_id": audit_id,
+        "baseline": baseline_id,
+        "new": [_summary(f) for f in result.new[:_MAX_LISTED]],
+        "fixed": [_summary(f) for f in result.fixed[:_MAX_LISTED]],
+        "persisting": len(result.persisting),
+        "metric_regressions": [m.model_dump() | {"change": round(m.change, 3)} for m in result.metric_regressions],
+    }
 
 
 def finding_evidence(audit_id: str, finding: str) -> dict[str, Any]:

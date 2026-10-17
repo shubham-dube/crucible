@@ -121,3 +121,11 @@ class RenderReport(_Tool):
         result = toolkit.render_report(audit_ids, str(args.get("format", "markdown")), str(args.get("summary", "")))
         sly_data[REPORT_KEY] = result["path"]
         return result
+
+
+class RegressionDiff(_Tool):
+    """Latest (or given) audit vs. a baseline label."""
+
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any]:
+        audit_id = args.get("audit_id") or (sly_data.get(AUDITS_KEY) or [""])[-1]
+        return toolkit.regression_diff(str(audit_id), str(args.get("baseline", "main") or "main"))

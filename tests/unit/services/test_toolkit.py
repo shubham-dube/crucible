@@ -58,3 +58,17 @@ def test_audit_lookup_evidence_leaks_and_report(crucible_home: Path) -> None:
     assert report["path"].startswith(str(crucible_home))
     with pytest.raises(ConfigError):
         toolkit.get_audit("audit-missing")
+
+
+def test_regression_diff_tool(crucible_home: Path) -> None:
+    repo = toolkit.repository()
+    base = TargetAudit(target="t", network_path="n", runtime_findings=(FINDING,))
+    repo.save("audit-base", base)
+    current = TargetAudit(target="t", network_path="n")
+    repo.save("audit-cur", current)
+    assert toolkit.regression_diff("audit-cur")["baseline"] is None
+    repo.set_baseline("t", "main", "audit-base")
+    result = toolkit.regression_diff("audit-cur")
+    assert result["baseline"] == "audit-base"
+    assert result["new"] == []
+    assert [f["rule"] for f in result["fixed"]] == ["leak/sly-data-exposure"]
