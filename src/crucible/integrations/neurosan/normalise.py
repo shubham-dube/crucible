@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from crucible.domain.trace import Span, SpanKind, TokenUsage
+from crucible.domain.trace import Span, SpanKind, TokenUsage, agent_of
+
+__all__ = ["Normaliser", "agent_of", "origin_path"]
 
 # neuro_san.message.types.chat_message_type values
 SYSTEM, HUMAN, AI, AGENT, AGENT_FRAMEWORK, AGENT_TOOL_RESULT, AGENT_PROGRESS = 1, 2, 4, 100, 101, 103, 104
@@ -15,11 +17,6 @@ def origin_path(origin: Any) -> tuple[str, ...]:
     if not isinstance(origin, list):
         return ()
     return tuple(f"{o.get('tool')}#{o.get('instantiation_index', 1)}" for o in origin if isinstance(o, dict))
-
-
-def agent_of(path: tuple[str, ...]) -> str | None:
-    """Innermost agent name of an origin path."""
-    return path[-1].rsplit("#", 1)[0] if path else None
 
 
 def _clean_args(args: Any) -> dict[str, Any]:

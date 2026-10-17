@@ -8,6 +8,11 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
+def agent_of(path: tuple[str, ...]) -> str | None:
+    """Innermost agent name of an origin path like ('front#1', 'tool#2')."""
+    return path[-1].rsplit("#", 1)[0] if path else None
+
+
 class SpanKind(StrEnum):
     """Kinds of observable events in a run."""
 

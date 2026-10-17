@@ -33,11 +33,12 @@ def _main(
     from crucible.observability.logging import configure_logging
 
     settings = get_settings()
-    configure_logging("DEBUG" if verbose else settings.log_level, settings.log_json)
+    configure_logging("DEBUG" if verbose else "WARNING", settings.log_json)
     if not verbose:
-        for noisy in ("neuro_san", "leaf_common", "langchain", "httpx", "root"):
-            logging.getLogger(noisy).setLevel(logging.ERROR)
-        logging.getLogger().setLevel(logging.ERROR)
+        # Target networks' own failures are findings, not log noise (Neuro-SAN logs coded-tool tracebacks at ERROR).
+        for noisy in ("neuro_san", "leaf_common", "langchain", "httpx"):
+            logging.getLogger(noisy).setLevel(logging.CRITICAL)
+        logging.getLogger().setLevel(logging.CRITICAL)
 
 
 class FailOn(StrEnum):
@@ -137,6 +138,81 @@ def run(
     except CrucibleError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(2) from exc
+
+
+@app.command()
+def audit(
+    project_dir: Annotated[Path, typer.Argument(help="Directory containing crucible.yaml.", exists=True)],
+    target: Annotated[list[str] | None, typer.Option("--target", "-t", help="Target name (repeatable).")] = None,
+    repetitions: Annotated[int, typer.Option("--repetitions", "-n", min=1)] = 1,
+    timeout: Annotated[float, typer.Option(help="Hard timeout per run, seconds.")] = 120.0,
+    fmt: Annotated[str, typer.Option("--format", "-f", help="table | json | sarif")] = "table",
+    output: Annotated[Path | None, typer.Option("--output", "-o")] = None,
+    fail_on: Annotated[FailOn, typer.Option(help="Exit 1 if findings at/above this severity.")] = FailOn.ERROR,
+    max_delegations: Annotated[int, typer.Option(help="Delegation budget per run (0 = off).")] = 50,
+    save: Annotated[bool, typer.Option(help="Persist traces under $CRUCIBLE_HOME/runs.")] = True,
+) -> None:
+    """Lint, run and judge targets: static + runtime findings with trace evidence."""
+    from crucible.config import get_settings
+    from crucible.config.project import Project
+    from crucible.judges import Budgets
+    from crucible.services.audit import AuditOptions, AuditService
+    from crucible.storage.run_store import FileRunStore
+
+    try:
+        project = Project.load(project_dir)
+        service = AuditService(project)
+        specs = [project.target(name) for name in target] if target else list(project.spec.targets)
+        options = AuditOptions(
+            repetitions=repetitions,
+            timeout_s=timeout,
+            budgets=Budgets(max_delegations=max_delegations or None),
+        )
+        store = FileRunStore(get_settings().home)
+        targets: list[TargetFindings] = []
+        failed = False
+        for spec in specs:
+            result = service.audit_target(spec, options)
+            if save and result.batch is not None:
+                store.save(result.batch)
+            targets.append(
+                TargetFindings(network=result.target, file=result.network_path, findings=tuple(result.findings))
+            )
+            threshold = fail_on.threshold()
+            failed = failed or (
+                threshold is not None and any(f.severity.rank >= threshold.rank for f in result.findings)
+            )
+        emit(get_reporter(fmt).render(FindingsReport(kind="audit", targets=tuple(targets))), output)
+    except CrucibleError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+    if failed:
+        raise typer.Exit(1)
+
+
+@app.command()
+def bench(
+    project_dir: Annotated[Path, typer.Argument(help="Benchmark project (targets with expected findings).")] = Path(
+        "examples/targets"
+    ),
+    output: Annotated[Path | None, typer.Option("--output", "-o", help="Write the markdown report here.")] = None,
+    min_recall: Annotated[float, typer.Option(help="Exit 1 below this recall.")] = 0.9,
+    min_precision: Annotated[float, typer.Option(help="Exit 1 below this precision.")] = 0.9,
+    timeout: Annotated[float, typer.Option(help="Hard timeout per run, seconds.")] = 60.0,
+) -> None:
+    """Score Crucible against ground truth (the bug zoo)."""
+    from crucible.config.project import Project
+    from crucible.evaluation.benchmark import run_benchmark
+    from crucible.services.audit import AuditOptions, AuditService
+
+    try:
+        report = run_benchmark(AuditService(Project.load(project_dir)), AuditOptions(timeout_s=timeout))
+    except CrucibleError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+    emit(report.to_markdown(), output)
+    if report.recall < min_recall or report.precision < min_precision:
+        raise typer.Exit(1)
 
 
 def main() -> None:

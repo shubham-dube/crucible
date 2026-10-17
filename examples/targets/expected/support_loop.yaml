@@ -1,7 +1,9 @@
 findings:
   - {rule_id: topology/cycle-risk, agent: billing_expert}
   - {rule_id: topology/routing-overlap, agent: helpdesk}
-  - {rule_id: trace/ping-pong, scenario: refund-request, note: billing_expert <-> payments_expert}
+  - {rule_id: trace/ping-pong, agent: billing_expert, scenario: refund-request, note: billing_expert <-> payments_expert}
+  - {rule_id: trace/timeout, scenario: refund-request, note: the loop only ends when max_execution_seconds fires}
+  - {rule_id: budget/delegations, scenario: refund-request, note: 100+ delegations for one question}
 must_not:
   - leak/sly-data-exposure
   - injection/instruction-followed
