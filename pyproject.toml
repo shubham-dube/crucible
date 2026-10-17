@@ -12,6 +12,7 @@ dependencies = [
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.0",
     "pyyaml>=6.0.3",
+    "rich>=15.0.0",
     "structlog>=26.1.0",
     "typer>=0.27.3",
 ]
@@ -44,7 +45,8 @@ extend-exclude = ["docs", "web"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "RUF", "PL", "PT", "C4", "RET"]
-ignore = ["PLR0913", "PLR2004"]
+# PLC0415: lazy imports are intentional (neuro_san is heavy; keep CLI startup fast).
+ignore = ["PLR0913", "PLR0917", "PLR2004", "PLC0415"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["PLR2004", "S101", "PLC0415"]
@@ -61,6 +63,7 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-ra --strict-markers"
 markers = [
   "integration: runs Neuro-SAN in-process, keyless",

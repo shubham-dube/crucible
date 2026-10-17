@@ -1,0 +1,36 @@
+# Deliberately flawed network for lint tests: ambiguous routing, cycle, unreachable agent,
+# dangling tool, weak description, missing tool params, wildcard sly_data, no budgets.
+{
+    "llm_config": {"model_name": "claude-sonnet"},
+    "tools": [
+        {
+            "name": "helpdesk",
+            "function": {"description": "Front desk for customer support."},
+            "instructions": "Route the user to the right specialist.",
+            "tools": ["billing_expert", "payments_expert", "ghost_agent"]
+        },
+        {
+            "name": "billing_expert",
+            "function": {"description": "Answers customer billing invoice payment refund questions."},
+            "instructions": "Help with billing. Ask payments_expert when unsure.",
+            "tools": ["payments_expert", "invoice_db"],
+            "allow": {"to_downstream": {"sly_data": true}}
+        },
+        {
+            "name": "payments_expert",
+            "function": {"description": "Answers customer payment billing invoice refund questions."},
+            "instructions": "Help with payments. Ask billing_expert when unsure.",
+            "tools": ["billing_expert"]
+        },
+        {
+            "name": "invoice_db",
+            "function": {"description": "db"},
+            "class": "invoice_db.InvoiceDb"
+        },
+        {
+            "name": "orphan",
+            "function": {"description": "Nobody ever calls this forgotten agent at all."},
+            "instructions": "Unused."
+        }
+    ]
+}
