@@ -1,0 +1,7 @@
+rules:
+  - when: {system_contains: "order desk front man", first_turn: true}
+    respond:
+      tool_calls: [{name: order_lookup, args: {order_id: "A-42"}}]
+  - when: {system_contains: "order desk front man", after_tool: order_lookup}
+    respond: {text: "Your order status: {last_tool_result}"}
+default: {text: "I can only help with orders."}

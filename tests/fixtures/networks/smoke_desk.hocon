@@ -1,0 +1,28 @@
+# Minimal keyless network: front man delegates to a coded tool, driven by the scripted LLM.
+{
+    "llm_config": {
+        "class": "crucible.integrations.neurosan.scripted_llm.ScriptedChatModel",
+        "script_path": ${?CRUCIBLE_FIXTURES}"/scripts/smoke_desk.yaml"
+    },
+    "max_execution_seconds": 60,
+    "tools": [
+        {
+            "name": "desk",
+            "function": {"description": "Answers order status questions."},
+            "instructions": "You are the order desk front man. Use order_lookup for order questions.",
+            "tools": ["order_lookup"]
+        },
+        {
+            "name": "order_lookup",
+            "function": {
+                "description": "Looks up an order by id.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"order_id": {"type": "string", "description": "Order id"}},
+                    "required": ["order_id"]
+                }
+            },
+            "class": "order_lookup.OrderLookup"
+        }
+    ]
+}
