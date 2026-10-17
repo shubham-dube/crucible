@@ -246,6 +246,75 @@ def chaos(
         raise typer.Exit(1)
 
 
+@app.command()
+def plan(
+    project_dir: Annotated[Path, typer.Argument(help="Directory containing crucible.yaml.", exists=True)],
+    target: Annotated[str, typer.Option("--target", "-t", help="Target name.")],
+    measure: Annotated[bool, typer.Option(help="Run existing scenarios to measure achieved coverage.")] = True,
+    write: Annotated[Path | None, typer.Option(help="Write existing + generated scenarios to this YAML.")] = None,
+    probes: Annotated[bool, typer.Option(help="Add adversarial probe scenarios.")] = True,
+    timeout: Annotated[float, typer.Option(help="Hard timeout per run, seconds.")] = 60.0,
+) -> None:
+    """Delegation-edge coverage of the scenario set, plus generated scenarios for the gaps."""
+    from crucible.config.project import Project
+    from crucible.execution.runner import Runner
+    from crucible.integrations.neurosan.direct_adapter import NeuroSanDirectAdapter
+    from crucible.integrations.neurosan.loader import load_network
+    from crucible.scenarios.coverage import CoverageReport, coverage, edges
+    from crucible.scenarios.generator import TemplateGenerator
+    from crucible.scenarios.io import merge_suites, write_suite
+
+    try:
+        project = Project.load(project_dir)
+        project.activate()
+        spec = project.target(target)
+        graph = load_network(project.network_path(spec)).graph
+        suite = project.scenarios(spec)
+        if measure and suite.scenarios:
+            adapter = NeuroSanDirectAdapter(project.network_path(spec))
+            report = coverage(graph, [Runner(adapter, timeout_s=timeout).run(spec.name, suite.scenarios)])
+        else:
+            report = CoverageReport(edges=tuple(edges(graph)), covered=())
+        generated = TemplateGenerator(include_probes=probes).generate(graph, report.uncovered)
+    except CrucibleError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+    typer.echo(f"{spec.name}: edge coverage {report.ratio:.0%} ({len(report.covered)}/{len(report.edges)})")
+    for edge in report.edges:
+        mark = "x" if edge in report.covered else " "
+        typer.echo(f"  [{mark}] {edge.src} -> {edge.dst}")
+    typer.echo(f"generated {len(generated)} scenario(s): {', '.join(s.id for s in generated)}")
+    if write is not None:
+        typer.echo(f"wrote {write_suite(merge_suites(suite, generated), write)}", err=True)
+
+
+@app.command("export-tests")
+def export_tests(
+    project_dir: Annotated[Path, typer.Argument(help="Directory containing crucible.yaml.", exists=True)],
+    target: Annotated[str, typer.Option("--target", "-t", help="Target name.")],
+    out_dir: Annotated[Path, typer.Option("--out", "-o", help="Directory for Neuro-SAN test-case files.")],
+    agent_name: Annotated[str | None, typer.Option(help="Agent name to test (default: network file path).")] = None,
+) -> None:
+    """Export scenarios as Neuro-SAN data-driven test cases (neuro_san.test compatible)."""
+    import json
+
+    from crucible.config.project import Project
+    from crucible.scenarios.io import to_neurosan_test
+
+    try:
+        project = Project.load(project_dir)
+        spec = project.target(target)
+        agent = agent_name or str(project.network_path(spec))
+        out_dir.mkdir(parents=True, exist_ok=True)
+        for scenario in project.scenarios(spec).scenarios:
+            path = out_dir / f"{scenario.id}.hocon"
+            path.write_text(json.dumps(to_neurosan_test(scenario, agent), indent=2) + "\n", encoding="utf-8")
+            typer.echo(f"wrote {path}")
+    except CrucibleError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+
 def main() -> None:
     """Console-script entry point."""
     app()
