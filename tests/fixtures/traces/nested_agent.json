@@ -1,0 +1,189 @@
+[
+ {
+  "type": 1,
+  "origin": [
+   {
+    "tool": "helpdesk",
+    "instantiation_index": 1
+   }
+  ],
+  "text": "[helpdesk] You are the support front desk. Route billing or payment questions to a specialist."
+ },
+ {
+  "type": 2,
+  "origin": [
+   {
+    "tool": "helpdesk",
+    "instantiation_index": 1
+   }
+  ],
+  "text": "Can I get a copy of my invoice?"
+ },
+ {
+  "type": 100,
+  "origin": [
+   {
+    "tool": "helpdesk",
+    "instantiation_index": 1
+   }
+  ],
+  "text": "Invoking: `billing_expert` with:",
+  "structure": {
+   "invoking_start": true,
+   "invoked_agent_name": "billing_expert",
+   "params": {
+    "question": "Can I get a copy of my invoice?"
+   }
+  }
+ },
+ {
+  "type": 1,
+  "origin": [
+   {
+    "tool": "helpdesk",
+    "instantiation_index": 1
+   },
+   {
+    "tool": "billing_expert",
+    "instantiation_index": 1
+   }
+  ],
+  "text": "[billing_expert] Handle billing. If a refund is involved, ask payments_expert."
+ },
+ {
+  "type": 2,
+  "origin": [
+   {
+    "tool": "helpdesk",
+    "instantiation_index": 1
+   },
+   {
+    "tool": "billing_expert",
+    "instantiation_index": 1
+   }
+  ],
+  "text": "The question is 'Can I get a copy of my invoice?'."
+ },
+ {
+  "type": 4,
+  "origin": [
+   {
+    "tool": "helpdesk",
+    "instantiation_index": 1
+   },
+   {
+    "tool": "billing_expert",
+    "instantiation_index": 1
+   }
+  ],
+  "text": "Your invoice is available in the billing portal."
+ },
+ {
+  "type": 100,
+  "origin": [
+   {
+    "tool": "helpdesk",
+    "instantiation_index": 1
+   },
+   {
+    "tool": "billing_expert",
+    "instantiation_index": 1
+   }
+  ],
+  "text": "",
+  "structure": {
+   "total_tokens": 44,
+   "prompt_tokens": 32,
+   "completion_tokens": 12,
+   "successful_requests": 1,
+   "empty_responses": 0,
+   "total_cost": 0.0,
+   "time_taken_in_seconds": 0.005084037780761719
+  }
+ },
+ {
+  "type": 103,
+  "origin": [
+   {
+    "tool": "helpdesk",
+    "instantiation_index": 1
+   }
+  ],
+  "text": "Your invoice is available in the billing portal.",
+  "tool_result_origin": [
+   {
+    "tool": "helpdesk",
+    "instantiation_index": 1
+   },
+   {
+    "tool": "billing_expert",
+    "instantiation_index": 1
+   }
+  ]
+ },
+ {
+  "type": 4,
+  "origin": [
+   {
+    "tool": "helpdesk",
+    "instantiation_index": 1
+   }
+  ],
+  "text": "Here is what our specialists said: Your invoice is available in the billing portal."
+ },
+ {
+  "type": 100,
+  "origin": [
+   {
+    "tool": "helpdesk",
+    "instantiation_index": 1
+   }
+  ],
+  "text": "",
+  "structure": {
+   "total_tokens": 139,
+   "prompt_tokens": 106,
+   "completion_tokens": 33,
+   "successful_requests": 3,
+   "empty_responses": 0,
+   "total_cost": 0.0,
+   "time_taken_in_seconds": 0.024764060974121094
+  }
+ },
+ {
+  "type": 100,
+  "origin": [
+   {
+    "tool": "helpdesk",
+    "instantiation_index": 1
+   }
+  ],
+  "text": "",
+  "structure": {
+   "total_tokens": 139,
+   "prompt_tokens": 106,
+   "completion_tokens": 33,
+   "successful_requests": 3,
+   "empty_responses": 0,
+   "total_cost": 0.0,
+   "time_taken_in_seconds": 0.024764060974121094,
+   "models": {
+    "ScriptedChatModel": {
+     "": {
+      "total_tokens": 139,
+      "prompt_tokens": 106,
+      "completion_tokens": 33,
+      "successful_requests": 3,
+      "empty_responses": 0,
+      "total_cost": 0.0,
+      "time_taken_in_seconds": 0.003753185272216797
+     }
+    }
+   }
+  }
+ },
+ {
+  "type": 101,
+  "text": "Here is what our specialists said: Your invoice is available in the billing portal."
+ }
+]

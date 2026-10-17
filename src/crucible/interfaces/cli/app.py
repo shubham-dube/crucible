@@ -22,6 +22,24 @@ app = typer.Typer(
 )
 
 
+@app.callback()
+def _main(
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Show framework (Neuro-SAN) logs.")] = False,
+) -> None:
+    """Configure logging before any command runs."""
+    import logging
+
+    from crucible.config import get_settings
+    from crucible.observability.logging import configure_logging
+
+    settings = get_settings()
+    configure_logging("DEBUG" if verbose else settings.log_level, settings.log_json)
+    if not verbose:
+        for noisy in ("neuro_san", "leaf_common", "langchain", "httpx", "root"):
+            logging.getLogger(noisy).setLevel(logging.ERROR)
+        logging.getLogger().setLevel(logging.ERROR)
+
+
 class FailOn(StrEnum):
     """Severity threshold that makes the command exit non-zero."""
 
@@ -82,6 +100,43 @@ def lint(
     emit(reporter.render(FindingsReport(kind="lint", targets=tuple(targets))), output)
     if failed:
         raise typer.Exit(1)
+
+
+@app.command()
+def run(
+    project_dir: Annotated[Path, typer.Argument(help="Directory containing crucible.yaml.", exists=True)],
+    target: Annotated[list[str] | None, typer.Option("--target", "-t", help="Target name (repeatable).")] = None,
+    scenario: Annotated[str | None, typer.Option(help="Only run this scenario id.")] = None,
+    repetitions: Annotated[int, typer.Option("--repetitions", "-n", min=1, help="Runs per scenario.")] = 1,
+    timeout: Annotated[float, typer.Option(help="Hard timeout per run, seconds.")] = 120.0,
+    save: Annotated[bool, typer.Option(help="Persist traces under $CRUCIBLE_HOME/runs.")] = True,
+) -> None:
+    """Execute hand-written scenarios against target networks and record full traces."""
+    from crucible.config import get_settings
+    from crucible.config.project import Project
+    from crucible.execution.runner import Runner
+    from crucible.integrations.neurosan.direct_adapter import NeuroSanDirectAdapter
+    from crucible.interfaces.cli.render import render_batch
+    from crucible.storage.run_store import FileRunStore
+
+    try:
+        project = Project.load(project_dir)
+        project.activate()
+        specs = [project.target(name) for name in target] if target else list(project.spec.targets)
+        store = FileRunStore(get_settings().home)
+        for spec in specs:
+            scenarios = [s for s in project.scenarios(spec).scenarios if scenario is None or s.id == scenario]
+            if not scenarios:
+                typer.echo(f"{spec.name}: no scenarios", err=True)
+                continue
+            adapter = NeuroSanDirectAdapter(project.network_path(spec))
+            batch = Runner(adapter, timeout_s=timeout).run(spec.name, scenarios, repetitions)
+            typer.echo(render_batch(batch))
+            if save:
+                typer.echo(f"saved {store.save(batch)}", err=True)
+    except CrucibleError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(2) from exc
 
 
 def main() -> None:
