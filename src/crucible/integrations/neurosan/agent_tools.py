@@ -129,3 +129,24 @@ class RegressionDiff(_Tool):
     def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any]:
         audit_id = args.get("audit_id") or (sly_data.get(AUDITS_KEY) or [""])[-1]
         return toolkit.regression_diff(str(audit_id), str(args.get("baseline", "main") or "main"))
+
+
+class ProposeFixes(_Tool):
+    """Candidate config fixes for the latest audit."""
+
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any]:
+        project_dir, _ = _ctx(args, sly_data)
+        audit_id = args.get("audit_id") or (sly_data.get(AUDITS_KEY) or [""])[-1]
+        return toolkit.propose_fixes(project_dir, str(audit_id))
+
+
+class VerifyFixes(_Tool):
+    """Re-audit patched copies; only verified fixes are accepted."""
+
+    def run(self, args: dict[str, Any], sly_data: dict[str, Any]) -> dict[str, Any]:
+        project_dir, _ = _ctx(args, sly_data)
+        audit_id = args.get("audit_id") or (sly_data.get(AUDITS_KEY) or [""])[-1]
+        ids = args.get("proposal_ids") or []
+        if isinstance(ids, str):
+            ids = [i.strip() for i in ids.split(",") if i.strip()]
+        return toolkit.verify_fixes(project_dir, str(audit_id), list(ids), args.get("ops"))

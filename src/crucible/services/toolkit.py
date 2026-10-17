@@ -282,3 +282,74 @@ def render_report(audit_ids: list[str], fmt: str = "markdown", summary: str = ""
     path = directory / f"{new_id('report')}.{suffix}"
     path.write_text(text, encoding="utf-8")
     return {"path": str(path), "format": name, "targets": [a.target for a in audits]}
+
+
+_PROPOSALS: dict[str, list[Any]] = {}
+
+
+def propose_fixes(project_dir: str, audit_id: str) -> dict[str, Any]:
+    """Deterministic fix proposals for an audit (cached for verify_fixes)."""
+    from crucible.services.fixing import proposals_for
+
+    audit = get_audit(audit_id)
+    project = _project(project_dir)
+    proposals = proposals_for(AuditService(project), project.target(audit.target), audit)
+    _PROPOSALS[audit_id] = proposals
+    return {
+        "audit_id": audit_id,
+        "proposals": [
+            {
+                "id": p.id,
+                "rule": p.rule_id,
+                "agent": p.agent,
+                "manual": p.manual,
+                "rationale": p.rationale,
+                "ops": [o.model_dump(mode="json") for o in p.ops],
+            }
+            for p in proposals
+        ],
+    }
+
+
+def verify_fixes(
+    project_dir: str, audit_id: str, proposal_ids: list[str] | None = None, ops: Any = None
+) -> dict[str, Any]:
+    """Verify cached proposals (all, or the given ids) - or one custom proposal from ``ops`` JSON - by re-auditing."""
+    from crucible.domain.fix import FixProposal, PatchOp
+    from crucible.fixes.verify import verify
+
+    audit = get_audit(audit_id)
+    project = _project(project_dir)
+    spec = project.target(audit.target)
+    candidates = list(_PROPOSALS.get(audit_id, []))
+    if ops:
+        raw = json.loads(ops) if isinstance(ops, str) else ops
+        base = next((p for p in candidates if not proposal_ids or p.id in proposal_ids), None)
+        if base is None:
+            return {"error": "custom ops need a proposal id to refine (run propose_fixes first)"}
+        try:
+            parsed = tuple(PatchOp.model_validate(o) for o in raw)
+        except (ValidationError, TypeError) as exc:
+            return {"error": f"invalid ops: {str(exc)[:300]}"}
+        candidates = [FixProposal(**{**base.model_dump(), "id": base.id + "-r", "ops": parsed, "manual": False})]
+    elif proposal_ids:
+        candidates = [p for p in candidates if p.id in proposal_ids]
+    scenarios = [*project.scenarios(spec).scenarios, *load_generated(audit.target).scenarios]
+    workdir = _home() / "fixes" / audit_id
+    verdicts = [verify(AuditService(project), spec, audit, p, scenarios, workdir) for p in candidates]
+    return {
+        "audit_id": audit_id,
+        "verdicts": [
+            {
+                "proposal": v.proposal.id,
+                "rule": v.proposal.rule_id,
+                "agent": v.proposal.agent,
+                "accepted": v.accepted,
+                "reason": v.reason,
+                "resolved": [f.rule_id for f in v.resolved],
+                "new_findings": [_summary(f) for f in v.new_findings],
+                "patched_network": v.patched_path,
+            }
+            for v in verdicts
+        ],
+    }

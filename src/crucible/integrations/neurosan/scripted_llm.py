@@ -162,6 +162,16 @@ def _matches(cond: ScriptCondition, view: _ConversationView, tool_names: set[str
     return cond.tool_available is None or cond.tool_available in tool_names
 
 
+def _callable(response: ScriptResponse, tool_names: set[str] | None) -> bool:
+    """A real model cannot call tools it was not given: skip rules whose tool calls are not bound.
+
+    ``tool_names`` is None when the caller did not bind tools at all (direct invocation in unit tests).
+    """
+    if tool_names is None:
+        return True
+    return all(call.name in tool_names for call in response.tool_calls)
+
+
 def _fill(template: str, view: _ConversationView) -> str:
     tool_msg = view.last_tool_message
     values = {
@@ -235,7 +245,11 @@ class ScriptedChatModel(BaseChatModel):
         view = _ConversationView(messages)
         names = tool_names or set()
         response = next(
-            (rule.respond for rule in self.script.rules if _matches(rule.when, view, names)),
+            (
+                rule.respond
+                for rule in self.script.rules
+                if _matches(rule.when, view, names) and _callable(rule.respond, tool_names)
+            ),
             self.script.default,
         )
         text = _fill(response.text, view)
@@ -267,7 +281,11 @@ class ScriptedChatModel(BaseChatModel):
         run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> ChatResult:
-        tools = kwargs.get("tools") or []
-        tool_names = {t.get("function", {}).get("name", "") for t in tools if isinstance(t, dict)}
+        tools = kwargs.get("tools")
+        tool_names = (
+            {t.get("function", {}).get("name", "") for t in tools if isinstance(t, dict)}
+            if tools is not None
+            else None
+        )
         message = self.respond(messages, tool_names)
         return ChatResult(generations=[ChatGeneration(message=message)])

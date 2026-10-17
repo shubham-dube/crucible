@@ -438,6 +438,49 @@ def export_tests(
         raise typer.Exit(2) from exc
 
 
+@app.command()
+def fix(
+    project_dir: Annotated[Path, typer.Argument(help="Directory containing crucible.yaml.", exists=True)],
+    target: Annotated[str, typer.Option("--target", "-t", help="Target name.")],
+    out: Annotated[Path | None, typer.Option(help="Copy verified patched networks into this directory.")] = None,
+    show_diff: Annotated[
+        bool, typer.Option("--diff/--no-diff", help="Print the config diff of accepted fixes.")
+    ] = True,
+    timeout: Annotated[float, typer.Option(help="Hard timeout per run, seconds.")] = 60.0,
+) -> None:
+    """Propose fixes for a target's findings and keep only those verified by re-running the audit."""
+    import shutil
+
+    from crucible.config import get_settings
+    from crucible.config.project import Project
+    from crucible.execution.runner import new_id
+    from crucible.services.audit import AuditOptions, AuditService
+    from crucible.services.fixing import fix_target
+
+    try:
+        service = AuditService(Project.load(project_dir))
+        spec = service.project.target(target)
+        workdir = Path(get_settings().home) / "fixes" / new_id("fix")
+        audit, verdicts = fix_target(service, spec, workdir, options=AuditOptions(timeout_s=timeout))
+    except CrucibleError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+    typer.echo(f"{target}: {len(audit.findings)} finding(s), {len(verdicts)} proposal(s)")
+    for verdict in verdicts:
+        mark = "ACCEPTED" if verdict.accepted else "rejected"
+        typer.echo(
+            f"[{mark}] {verdict.proposal.id} {verdict.proposal.rule_id} @ {verdict.proposal.agent}: {verdict.reason}"
+        )
+        typer.echo(f"    {verdict.proposal.rationale}")
+        if verdict.accepted and show_diff:
+            typer.echo(verdict.diff)
+        if verdict.accepted and out is not None and verdict.patched_path:
+            out.mkdir(parents=True, exist_ok=True)
+            dest = out / f"{verdict.proposal.id}-{Path(verdict.patched_path).name}"
+            shutil.copyfile(verdict.patched_path, dest)
+            typer.echo(f"    wrote {dest}")
+
+
 def main() -> None:
     """Console-script entry point."""
     app()

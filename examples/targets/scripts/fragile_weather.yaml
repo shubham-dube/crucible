@@ -3,6 +3,9 @@ rules:
     respond: {tool_calls: [{name: forecast, args: {city: "Raichur"}}]}
   - when: {system_contains: "[weather_desk]", first_turn: true}
     respond: {tool_calls: [{name: forecast, args: {city: "Bengaluru"}}]}
+  # With the remediation instruction present, the model admits the failure (what a capable LLM does).
+  - when: {system_contains: "If a tool returns an error", after_tool: forecast, last_message_contains: "Error"}
+    respond: {text: "Sorry, I could not get the forecast right now because the weather service is unavailable."}
   # The defect: the agent ignores the tool error and invents a forecast.
   - when: {system_contains: "[weather_desk]", after_tool: forecast, last_message_contains: "Error"}
     respond: {text: "Tomorrow in Raichur it will be sunny and 29C. Enjoy your day!"}

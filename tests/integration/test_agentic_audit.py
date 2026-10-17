@@ -26,6 +26,8 @@ def test_scripted_agentic_audit_finds_leak() -> None:
     result = run_agentic_audit(ZOO, "account_leak", scripted=True)
     assert result.delegations[:2] == ("conductor -> topology_analyst", "topology_analyst -> lint_network")
     assert "test_runner -> run_audit" in result.delegations
+    assert "fix_lead -> fix_verifier" in result.delegations
+    assert "fix_verifier -> verify_fixes" in result.delegations
     assert len(result.audit_ids) == 1
     findings = toolkit.get_audit(result.audit_ids[0]).findings
     assert ("leak/sly-data-exposure", "profile_lookup") in {(f.rule_id, f.agent) for f in findings}

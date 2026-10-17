@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Callable, Sequence
+from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -49,6 +50,12 @@ def default_adapter(project: Project, spec: TargetSpec) -> TargetAdapter:
 class AuditService:
     """Runs the deterministic audit pipeline for project targets."""
 
+    @staticmethod
+    def _adapter_for(path: Path) -> TargetAdapter:
+        from crucible.integrations.neurosan.direct_adapter import NeuroSanDirectAdapter
+
+        return NeuroSanDirectAdapter(path)
+
     def __init__(self, project: Project, adapter_factory: AdapterFactory = default_adapter) -> None:
         self.project = project
         self.adapter_factory = adapter_factory
@@ -60,17 +67,20 @@ class AuditService:
         options: AuditOptions | None = None,
         scenarios: Sequence[Scenario] | None = None,
         on_result: Callable[[RunResult], None] | None = None,
+        network_path: Path | None = None,
     ) -> TargetAudit:
-        """Lint, execute scenarios and judge the traces for one target."""
+        """Lint, execute scenarios and judge the traces for one target (optionally a patched copy of it)."""
         opts = options or AuditOptions()
-        loaded = load_network(self.project.network_path(spec))
+        path = network_path or self.project.network_path(spec)
+        loaded = load_network(path)
         static = lint(loaded, opts.lint).findings
         suite = list(scenarios) if scenarios is not None else list(self.project.scenarios(spec).scenarios)
         if opts.scenario_ids is not None:
             suite = [s for s in suite if s.id in opts.scenario_ids]
         if not suite:
             return TargetAudit(target=spec.name, network_path=str(loaded.path), static_findings=static)
-        runner = Runner(self.adapter_factory(self.project, spec), timeout_s=opts.timeout_s, chaos=opts.chaos)
+        adapter = self.adapter_factory(self.project, spec) if network_path is None else self._adapter_for(path)
+        runner = Runner(adapter, timeout_s=opts.timeout_s, chaos=opts.chaos)
         batch = runner.run(spec.name, suite, opts.repetitions, on_result=on_result)
         raw = judge_batch(batch, loaded.graph, suite, opts.budgets, disabled=opts.disabled_judges)
         per_scenario = Counter(r.scenario_id for r in batch.runs)

@@ -32,14 +32,14 @@ Work in this order and keep it tight:
 1. Ask topology_analyst for the static topology review.
 2. Ask scenario_designer to check delegation-edge coverage and add scenarios for uncovered edges (at most 2 rounds).
 3. Ask test_runner to run the audit including generated scenarios.
-4. If any leak/ finding appears, ask leak_auditor to confirm and explain it.
-5. For each error-severity finding (at most 3), ask trace_judge to explain the root cause from evidence.
+4. Ask investigator to confirm any leak/ findings and explain the root cause of the error-severity findings (at most 3).
+5. If there are error or warning findings, ask fix_lead for verified fixes. Only recommend fixes it reports as ACCEPTED.
 6. Ask regression_analyst whether anything is NEW compared with the baseline (the merge gate counts only new issues).
 7. Optionally ask chaos_engineer for a chaos matrix when the user asks about resilience.
 8. Ask report_writer to write the report, passing a 3-5 sentence executive summary.
 Finish with a short verdict: SAFE TO MERGE or NOT SAFE TO MERGE, the top issues by id, and the report path.
 {evidence_rule}""",
-            "tools": ["topology_analyst", "scenario_designer", "test_runner", "leak_auditor", "trace_judge", "regression_analyst", "chaos_engineer", "report_writer"],
+            "tools": ["topology_analyst", "scenario_designer", "test_runner", "investigator", "fix_lead", "regression_analyst", "chaos_engineer", "report_writer"],
             "allow": {"to_upstream": {"sly_data": ["crucible_audits", "crucible_report"]}}
         },
         {
@@ -71,22 +71,40 @@ Submit them with save_scenarios as a JSON list following scenario_schema. If som
             "tools": ["run_audit"]
         },
         {
-            "name": "leak_auditor",
+            "name": "investigator",
             "function": {
-                "description": "Confirms and explains private sly_data exposures found in an audit: which value class leaked, where it surfaced and which agent emitted it first.",
-                "parameters": {"type": "object", "properties": {"request": {"type": "string", "description": "Audit id or question about leaks"}}, "required": ["request"]}
+                "description": "Investigates audit findings: confirms private sly_data exposures and explains root causes of specific findings from trace evidence.",
+                "parameters": {"type": "object", "properties": {"request": {"type": "string", "description": "Leak question and/or finding ids to explain"}}, "required": ["request"]}
             },
-            "instructions": "You are Crucible's leak auditor. Call leak_report and explain each exposure: the sly_data key (never the value), every place it surfaced, the emitting agent and the fix. {evidence_rule} {specialist_style}",
-            "tools": ["leak_report"]
+            "instructions": """You are Crucible's investigator. For leaks call leak_report and explain each exposure: the sly_data key (never the value), where it surfaced, which agent emitted it first, and the fix. For a finding id call finding_evidence and explain the root cause in 2-4 sentences grounded in the evidence and delegation path, naming the agent and instruction or description to change. {evidence_rule} {specialist_style}""",
+            "tools": ["leak_report", "finding_evidence"]
         },
         {
-            "name": "trace_judge",
+            "name": "fix_lead",
             "function": {
-                "description": "Explains the root cause of a specific finding from its trace evidence and delegation path.",
-                "parameters": {"type": "object", "properties": {"request": {"type": "string", "description": "Finding id (and audit id if known) to explain"}}, "required": ["request"]}
+                "description": "Produces verified fixes: gets proposals from fix_proposer and has fix_verifier test each one, iterating on rejections.",
+                "parameters": {"type": "object", "properties": {"request": {"type": "string", "description": "Which findings to fix"}}, "required": ["request"]}
             },
-            "instructions": "You are Crucible's trace judge. Call finding_evidence for the finding id you were given. Explain the root cause in 2-4 sentences grounded in the evidence and delegation path, and give the most specific fix (which agent, which instruction or description to change). {evidence_rule} {specialist_style}",
-            "tools": ["finding_evidence"]
+            "instructions": """You are Crucible's fix lead and you run a critic loop. 1) Ask fix_proposer for proposals. 2) Ask fix_verifier to verify them. 3) For each REJECTED non-manual proposal, send the rejection reason back to fix_proposer once for refined ops, then verify again. Stop after 2 rounds. Report only verifier-ACCEPTED fixes as fixes; list manual and rejected ones separately with reasons. {evidence_rule} {specialist_style}""",
+            "tools": ["fix_proposer", "fix_verifier"]
+        },
+        {
+            "name": "fix_proposer",
+            "function": {
+                "description": "Proposes concrete configuration fixes (instructions, descriptions, edges, limits, sly_data allow-lists) for an audit's findings.",
+                "parameters": {"type": "object", "properties": {"request": {"type": "string", "description": "Which findings to fix, or a verifier rejection to address"}}, "required": ["request"]}
+            },
+            "instructions": "You are Crucible's fix proposer. Call propose_fixes and present each proposal with its id, the finding it targets and why it should work. Mark manual (code-change) proposals clearly. If you were given a verifier rejection, explain how the refined ops address it. {evidence_rule} {specialist_style}",
+            "tools": ["propose_fixes"]
+        },
+        {
+            "name": "fix_verifier",
+            "function": {
+                "description": "Critic: verifies proposed fixes by re-auditing a patched copy of the network; accepts a fix only if its finding disappears and nothing new breaks.",
+                "parameters": {"type": "object", "properties": {"request": {"type": "string", "description": "Proposal ids to verify (default: all) or refined ops"}}, "required": ["request"]}
+            },
+            "instructions": "You are Crucible's fix verifier and you are strict. Call verify_fixes. Report each verdict (ACCEPTED or REJECTED with the reason and any new findings). Never accept a fix the tool rejected. {evidence_rule} {specialist_style}",
+            "tools": ["verify_fixes"]
         },
         {
             "name": "regression_analyst",
@@ -155,6 +173,21 @@ Submit them with save_scenarios as a JSON list following scenario_schema. If som
             "function": {"description": "Lists sly_data leak findings of an audit with masked evidence and remediation.",
                 "parameters": {"type": "object", "properties": {"audit_id": {"type": "string", "description": "Audit id (optional; defaults to latest)"}}}},
             "class": "crucible.integrations.neurosan.agent_tools.LeakReport"
+        },
+        {
+            "name": "propose_fixes",
+            "function": {"description": "Returns deterministic fix proposals (patch ops) for the findings of an audit.",
+                "parameters": {"type": "object", "properties": {"audit_id": {"type": "string", "description": "Audit id (optional; defaults to latest)"}}}},
+            "class": "crucible.integrations.neurosan.agent_tools.ProposeFixes"
+        },
+        {
+            "name": "verify_fixes",
+            "function": {"description": "Applies proposals to a temporary copy of the network, re-runs the audit and returns accept/reject verdicts.",
+                "parameters": {"type": "object", "properties": {
+                    "proposal_ids": {"type": "string", "description": "Comma-separated proposal ids (optional; default all)"},
+                    "ops": {"type": "string", "description": "Optional JSON list of refined patch ops for ONE proposal id"},
+                    "audit_id": {"type": "string", "description": "Audit id (optional; defaults to latest)"}}}},
+            "class": "crucible.integrations.neurosan.agent_tools.VerifyFixes"
         },
         {
             "name": "regression_diff",

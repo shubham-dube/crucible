@@ -8,8 +8,10 @@ rules:
   - when: {system_contains: "Crucible audit conductor", after_tool: scenario_designer}
     respond: {tool_calls: [{name: test_runner, args: {request: "Run the audit including generated scenarios."}}]}
   - when: {system_contains: "Crucible audit conductor", after_tool: test_runner}
-    respond: {tool_calls: [{name: leak_auditor, args: {request: "Confirm leaks in the latest audit."}}]}
-  - when: {system_contains: "Crucible audit conductor", after_tool: leak_auditor}
+    respond: {tool_calls: [{name: investigator, args: {request: "Confirm leaks in the latest audit."}}]}
+  - when: {system_contains: "Crucible audit conductor", after_tool: investigator}
+    respond: {tool_calls: [{name: fix_lead, args: {request: "Produce verified fixes for all findings."}}]}
+  - when: {system_contains: "Crucible audit conductor", after_tool: fix_lead}
     respond: {tool_calls: [{name: regression_analyst, args: {request: "main"}}]}
   - when: {system_contains: "Crucible audit conductor", after_tool: regression_analyst}
     respond: {tool_calls: [{name: report_writer, args: {request: "Scripted audit completed; see findings."}}]}
@@ -22,8 +24,17 @@ rules:
     respond: {tool_calls: [{name: coverage_plan, args: {}}]}
   - when: {system_contains: "test runner", first_turn: true}
     respond: {tool_calls: [{name: run_audit, args: {include_generated: true}}]}
-  - when: {system_contains: "leak auditor", first_turn: true}
+  - when: {system_contains: "Crucible's investigator", first_turn: true}
     respond: {tool_calls: [{name: leak_report, args: {}}]}
+  # fix lead: proposer -> verifier (critic) -> report
+  - when: {system_contains: "fix lead", first_turn: true}
+    respond: {tool_calls: [{name: fix_proposer, args: {request: "Propose fixes for all findings."}}]}
+  - when: {system_contains: "fix lead", after_tool: fix_proposer}
+    respond: {tool_calls: [{name: fix_verifier, args: {request: "Verify all proposals."}}]}
+  - when: {system_contains: "fix proposer", first_turn: true}
+    respond: {tool_calls: [{name: propose_fixes, args: {}}]}
+  - when: {system_contains: "fix verifier", first_turn: true}
+    respond: {tool_calls: [{name: verify_fixes, args: {}}]}
   - when: {system_contains: "regression analyst", first_turn: true}
     respond: {tool_calls: [{name: regression_diff, args: {baseline: main}}]}
   - when: {system_contains: "report writer", first_turn: true}
