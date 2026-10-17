@@ -13,6 +13,7 @@ from crucible.domain.findings import Severity
 from crucible.reporting.base import FindingsReport, register_reporter
 
 _SARIF_LEVEL = {Severity.ERROR: "error", Severity.WARNING: "warning", Severity.INFO: "note"}
+_ICON = {Severity.ERROR: "🔴", Severity.WARNING: "🟠", Severity.INFO: "🔵"}
 _STYLE = {Severity.ERROR: "bold red", Severity.WARNING: "yellow", Severity.INFO: "cyan"}
 
 
@@ -100,5 +101,34 @@ class SarifReporter:
         return json.dumps(sarif, indent=2)
 
 
-for _reporter in (TableReporter(), JsonReporter(), SarifReporter()):
+class MarkdownReporter:
+    """GitHub-flavoured markdown (PR comments, report files)."""
+
+    name = "markdown"
+
+    def render(self, report: FindingsReport) -> str:
+        findings = report.all_findings
+        errors = sum(f.severity is Severity.ERROR for f in findings)
+        warnings = sum(f.severity is Severity.WARNING for f in findings)
+        lines = [f"# Crucible {report.kind} report", "", f"**{errors} error(s), {warnings} warning(s)**", ""]
+        for target in report.targets:
+            lines += [f"## `{target.network}`", ""]
+            if not target.findings:
+                lines += ["No findings. ✅", ""]
+                continue
+            lines += ["| | rule | agent | scenario | finding |", "|---|---|---|---|---|"]
+            for f in target.findings:
+                message = f.message.replace("|", "\\|").replace("\n", " ")
+                cells = [_ICON[f.severity], f"`{f.rule_id}`", f.agent or "-", f.scenario_id or "-", message]
+                lines.append("| " + " | ".join(cells) + " |")
+            lines.append("")
+            fixes = [f for f in target.findings if f.remediation and f.severity is not Severity.INFO]
+            if fixes:
+                lines += ["<details><summary>Remediation</summary>", ""]
+                lines += [f"- **{f.rule_id}** ({f.agent or '-'}): {f.remediation}" for f in fixes]
+                lines += ["", "</details>", ""]
+        return "\n".join(lines)
+
+
+for _reporter in (TableReporter(), JsonReporter(), SarifReporter(), MarkdownReporter()):
     register_reporter(_reporter)

@@ -23,6 +23,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/crucible"]
+artifacts = ["src/crucible/agents/registries/*.hocon", "src/crucible/agents/scripts/*.yaml"]
 
 [dependency-groups]
 dev = [

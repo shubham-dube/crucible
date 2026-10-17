@@ -32,17 +32,17 @@
 
 ## Crucible's own agent network (Neuro-SAN, AAOSA)
 ```
-conductor (front man: plans the audit, owns the loop budget)
-├── topology_analyst      → coded tool: lint
-├── scenario_designer     → coded tool: coverage plan; LLM writes scenarios
-├── chaos_engineer        → coded tool: fault catalog / plan builder
-├── test_runner           → coded tool: execute scenarios, return run summary ids
-├── trace_judge           → coded tool: judges; LLM explains root cause with evidence
-├── leak_auditor          → coded tool: canary scan (deterministic)
-├── regression_analyst    → coded tool: diff vs baseline
-├── fix_proposer          → LLM: structured HOCON patch
-│     └── fix_verifier    → coded tool: apply to temp copy + re-run; critic accepts/rejects
-└── report_writer         → coded tool: render reports; LLM writes executive summary
+conductor (front man: plans the audit, bounded loop)          src/crucible/agents/registries/crucible.hocon
+├── topology_analyst   → lint_network
+├── scenario_designer  → coverage_plan, save_scenarios      (evaluation loop: invalid scenarios are rejected)
+├── test_runner        → run_audit                          (lint + run + judge; audit id stored in sly_data)
+├── leak_auditor       → leak_report
+├── trace_judge        → finding_evidence                   (root cause from masked evidence + delegation path)
+├── chaos_engineer     → chaos_matrix
+├── report_writer      → render_report
+├── regression_analyst → (M8) diff vs baseline
+└── fix_proposer / fix_verifier → (M9) HOCON patch, verified by re-running
+Coded tools: crucible.integrations.neurosan.agent_tools (thin) -> crucible.services.toolkit (logic). ADR 0003.
 ```
 Raw target sly_data and canaries never enter Crucible's own LLM prompts; agents see finding ids, rule ids and redacted excerpts.
 

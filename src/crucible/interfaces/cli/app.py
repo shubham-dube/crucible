@@ -151,6 +151,11 @@ def audit(
     fail_on: Annotated[FailOn, typer.Option(help="Exit 1 if findings at/above this severity.")] = FailOn.ERROR,
     max_delegations: Annotated[int, typer.Option(help="Delegation budget per run (0 = off).")] = 50,
     save: Annotated[bool, typer.Option(help="Persist traces under $CRUCIBLE_HOME/runs.")] = True,
+    agentic: Annotated[
+        bool, typer.Option(help="Let Crucible's Neuro-SAN agent network plan and run the audit.")
+    ] = False,
+    scripted: Annotated[bool, typer.Option(help="With --agentic: deterministic keyless agents (CI/demo).")] = False,
+    request: Annotated[str | None, typer.Option(help="With --agentic: what to ask the conductor.")] = None,
 ) -> None:
     """Lint, run and judge targets: static + runtime findings with trace evidence."""
     from crucible.config import get_settings
@@ -159,6 +164,9 @@ def audit(
     from crucible.services.audit import AuditOptions, AuditService
     from crucible.storage.run_store import FileRunStore
 
+    if agentic:
+        _agentic_audit(project_dir, target, scripted, request, fail_on)
+        return
     try:
         project = Project.load(project_dir)
         service = AuditService(project)
@@ -183,6 +191,33 @@ def audit(
                 threshold is not None and any(f.severity.rank >= threshold.rank for f in result.findings)
             )
         emit(get_reporter(fmt).render(FindingsReport(kind="audit", targets=tuple(targets))), output)
+    except CrucibleError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+    if failed:
+        raise typer.Exit(1)
+
+
+def _agentic_audit(
+    project_dir: Path, targets: list[str] | None, scripted: bool, request: str | None, fail_on: FailOn
+) -> None:
+    from crucible.config.project import Project
+    from crucible.services import toolkit
+    from crucible.services.agentic import DEFAULT_REQUEST, run_agentic_audit
+
+    try:
+        project = Project.load(project_dir)
+        names = targets or [t.name for t in project.spec.targets]
+        failed = False
+        for name in names:
+            result = run_agentic_audit(project_dir, name, request or DEFAULT_REQUEST, scripted=scripted)
+            typer.echo(f"== {name}  ({result.duration_s:.1f}s, {len(result.delegations)} hand-offs)")
+            typer.echo(result.answer)
+            if result.report_path:
+                typer.echo(f"report: {result.report_path}")
+            threshold = fail_on.threshold()
+            findings = [f for a in result.audit_ids for f in toolkit.get_audit(a).findings]
+            failed = failed or (threshold is not None and any(f.severity.rank >= threshold.rank for f in findings))
     except CrucibleError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(2) from exc

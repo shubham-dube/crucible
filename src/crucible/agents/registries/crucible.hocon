@@ -1,0 +1,164 @@
+# Crucible: an agent network that QA-tests agent networks.
+# The conductor plans an audit and delegates to specialists; deterministic work (lint, runs, judging, leak proof,
+# chaos) happens in coded tools, judgement and explanation in LLM agents. project_dir / target arrive in sly_data.
+{
+    "commondefs": {
+        "replacement_strings": {
+            "evidence_rule": "Only report facts returned by your tools. Every claim must cite a finding id or audit id from a tool result. Never invent findings, numbers or agent names.",
+            "specialist_style": "Answer the caller concisely in plain text: what you did, the key results (with ids), and anything the caller must decide next."
+        }
+    },
+    "llm_config": {
+        "class": "anthropic",
+        "model_name": "claude-sonnet",
+        "model_name": ${?CRUCIBLE_AGENT_MODEL},
+        "temperature": 0.2
+    },
+    "max_steps": 200,
+    "max_execution_seconds": 1800,
+    "metadata": {
+        "description": "Crucible audits a Neuro-SAN agent network: topology lint, scenario coverage, execution traces, leak proof, chaos and an evidence-backed report.",
+        "tags": ["qa", "testing", "crucible"],
+        "sample_queries": ["Audit the target thoroughly and write a report.", "Is any private sly_data leaking?"]
+    },
+    "tools": [
+        {
+            "name": "conductor",
+            "function": {
+                "description": "Plans and runs a Crucible quality audit of the agent network named in sly_data.target."
+            },
+            "instructions": """You are the Crucible audit conductor. You audit ONE target agent network (its name and project are already known to your tools).
+Work in this order and keep it tight:
+1. Ask topology_analyst for the static topology review.
+2. Ask scenario_designer to check delegation-edge coverage and add scenarios for uncovered edges (at most 2 rounds).
+3. Ask test_runner to run the audit including generated scenarios.
+4. If any leak/ finding appears, ask leak_auditor to confirm and explain it.
+5. For each error-severity finding (at most 3), ask trace_judge to explain the root cause from evidence.
+6. Optionally ask chaos_engineer for a chaos matrix when the user asks about resilience.
+7. Ask report_writer to write the report, passing a 3-5 sentence executive summary.
+Finish with a short verdict: SAFE TO MERGE or NOT SAFE TO MERGE, the top issues by id, and the report path.
+{evidence_rule}""",
+            "tools": ["topology_analyst", "scenario_designer", "test_runner", "leak_auditor", "trace_judge", "chaos_engineer", "report_writer"],
+            "allow": {"to_upstream": {"sly_data": ["crucible_audits", "crucible_report"]}}
+        },
+        {
+            "name": "topology_analyst",
+            "function": {
+                "description": "Reviews the target network's static structure: cycles, unreachable agents, ambiguous routing descriptions, budgets and sly_data allow-lists.",
+                "parameters": {"type": "object", "properties": {"request": {"type": "string", "description": "What to review or focus on"}}, "required": ["request"]}
+            },
+            "instructions": "You are Crucible's topology analyst. Call lint_network and explain the most important findings and why they matter at runtime. {evidence_rule} {specialist_style}",
+            "tools": ["lint_network"]
+        },
+        {
+            "name": "scenario_designer",
+            "function": {
+                "description": "Measures which delegation edges the existing scenarios exercise and designs new test scenarios for uncovered edges and risky behaviours.",
+                "parameters": {"type": "object", "properties": {"request": {"type": "string", "description": "Coverage goal or behaviour to target"}}, "required": ["request"]}
+            },
+            "instructions": """You are Crucible's scenario designer. Call coverage_plan. For every uncovered edge write one realistic user request that should make the network take that route (use the 'to_description'), and set expect.route to the edge's route. You may add at most 2 adversarial scenarios (prompt injection in user text, or a private value in sly_data with expect.answer_not_contains that value). Use only synthetic data.
+Submit them with save_scenarios as a JSON list following scenario_schema. If some are rejected, fix them once and resubmit. {evidence_rule} {specialist_style}""",
+            "tools": ["coverage_plan", "save_scenarios"]
+        },
+        {
+            "name": "test_runner",
+            "function": {
+                "description": "Executes the target's scenarios (optionally with chaos faults) and judges the traces into evidence-backed findings.",
+                "parameters": {"type": "object", "properties": {"request": {"type": "string", "description": "What to run, e.g. include generated scenarios, chaos faults"}}, "required": ["request"]}
+            },
+            "instructions": "You are Crucible's test runner. Call run_audit (include_generated true unless told otherwise; chaos only if asked). Report the audit_id and the findings grouped by severity with their ids. {evidence_rule} {specialist_style}",
+            "tools": ["run_audit"]
+        },
+        {
+            "name": "leak_auditor",
+            "function": {
+                "description": "Confirms and explains private sly_data exposures found in an audit: which value class leaked, where it surfaced and which agent emitted it first.",
+                "parameters": {"type": "object", "properties": {"request": {"type": "string", "description": "Audit id or question about leaks"}}, "required": ["request"]}
+            },
+            "instructions": "You are Crucible's leak auditor. Call leak_report and explain each exposure: the sly_data key (never the value), every place it surfaced, the emitting agent and the fix. {evidence_rule} {specialist_style}",
+            "tools": ["leak_report"]
+        },
+        {
+            "name": "trace_judge",
+            "function": {
+                "description": "Explains the root cause of a specific finding from its trace evidence and delegation path.",
+                "parameters": {"type": "object", "properties": {"request": {"type": "string", "description": "Finding id (and audit id if known) to explain"}}, "required": ["request"]}
+            },
+            "instructions": "You are Crucible's trace judge. Call finding_evidence for the finding id you were given. Explain the root cause in 2-4 sentences grounded in the evidence and delegation path, and give the most specific fix (which agent, which instruction or description to change). {evidence_rule} {specialist_style}",
+            "tools": ["finding_evidence"]
+        },
+        {
+            "name": "chaos_engineer",
+            "function": {
+                "description": "Runs the chaos matrix (tool exceptions, empty, malformed and instruction-injected outputs) and reports which failures break the network.",
+                "parameters": {"type": "object", "properties": {"request": {"type": "string", "description": "Resilience question or specific fault profiles"}}, "required": ["request"]}
+            },
+            "instructions": "You are Crucible's chaos engineer. Call chaos_matrix (profiles optional, e.g. exception:tool_name). Report the resilience score and every non-resilient profile with its new findings. {evidence_rule} {specialist_style}",
+            "tools": ["chaos_matrix"]
+        },
+        {
+            "name": "report_writer",
+            "function": {
+                "description": "Writes the final audit report file for all audits of this session, with an executive summary.",
+                "parameters": {"type": "object", "properties": {"request": {"type": "string", "description": "Executive summary to include"}}, "required": ["request"]}
+            },
+            "instructions": "You are Crucible's report writer. Call render_report with format markdown and the executive summary you were given. Return the report path. {evidence_rule}",
+            "tools": ["render_report"]
+        },
+        {
+            "name": "lint_network",
+            "function": {"description": "Runs Crucible's static lint rules and Neuro-SAN's validators on the target network.",
+                "parameters": {"type": "object", "properties": {"target": {"type": "string", "description": "Target name (optional; defaults to the session target)"}}}},
+            "class": "crucible.integrations.neurosan.agent_tools.LintNetwork"
+        },
+        {
+            "name": "coverage_plan",
+            "function": {"description": "Runs existing scenarios and reports delegation-edge coverage with uncovered edges and the scenario schema.",
+                "parameters": {"type": "object", "properties": {"target": {"type": "string", "description": "Target name (optional)"}}}},
+            "class": "crucible.integrations.neurosan.agent_tools.CoveragePlan"
+        },
+        {
+            "name": "save_scenarios",
+            "function": {"description": "Validates scenarios (JSON list following scenario_schema) and stores the valid ones for the next audit.",
+                "parameters": {"type": "object", "properties": {"scenarios": {"type": "string", "description": "JSON list of scenario objects"}}, "required": ["scenarios"]}},
+            "class": "crucible.integrations.neurosan.agent_tools.SaveScenarios"
+        },
+        {
+            "name": "run_audit",
+            "function": {"description": "Executes scenarios against the target and judges traces into findings; returns audit_id and findings.",
+                "parameters": {"type": "object", "properties": {
+                    "include_generated": {"type": "boolean", "description": "Also run agent-designed scenarios"},
+                    "chaos": {"type": "string", "description": "Comma-separated fault profiles, e.g. exception:order_status"},
+                    "repetitions": {"type": "integer", "description": "Runs per scenario (default 1)"}}}},
+            "class": "crucible.integrations.neurosan.agent_tools.RunAudit"
+        },
+        {
+            "name": "finding_evidence",
+            "function": {"description": "Returns masked evidence, delegation path and answer for one finding id.",
+                "parameters": {"type": "object", "properties": {
+                    "finding_id": {"type": "string", "description": "8-character finding id"},
+                    "audit_id": {"type": "string", "description": "Audit id (optional; defaults to latest)"}}, "required": ["finding_id"]}},
+            "class": "crucible.integrations.neurosan.agent_tools.FindingEvidence"
+        },
+        {
+            "name": "leak_report",
+            "function": {"description": "Lists sly_data leak findings of an audit with masked evidence and remediation.",
+                "parameters": {"type": "object", "properties": {"audit_id": {"type": "string", "description": "Audit id (optional; defaults to latest)"}}}},
+            "class": "crucible.integrations.neurosan.agent_tools.LeakReport"
+        },
+        {
+            "name": "chaos_matrix",
+            "function": {"description": "Runs baseline plus fault profiles on coded tools and reports which faults introduce new findings.",
+                "parameters": {"type": "object", "properties": {"profiles": {"type": "string", "description": "Comma-separated fault profiles (optional)"}}}},
+            "class": "crucible.integrations.neurosan.agent_tools.ChaosMatrix"
+        },
+        {
+            "name": "render_report",
+            "function": {"description": "Writes the markdown report for this session's audits and returns its path.",
+                "parameters": {"type": "object", "properties": {
+                    "summary": {"type": "string", "description": "Executive summary"},
+                    "format": {"type": "string", "description": "markdown | json | sarif"}}}},
+            "class": "crucible.integrations.neurosan.agent_tools.RenderReport"
+        }
+    ]
+}

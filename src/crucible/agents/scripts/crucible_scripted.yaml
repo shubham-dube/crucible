@@ -1,0 +1,27 @@
+# Drives Crucible's own network deterministically: conductor -> each specialist -> tools -> verdict.
+rules:
+  # conductor: sequential plan
+  - when: {system_contains: "Crucible audit conductor", first_turn: true}
+    respond: {tool_calls: [{name: topology_analyst, args: {request: "Review the static topology."}}]}
+  - when: {system_contains: "Crucible audit conductor", after_tool: topology_analyst}
+    respond: {tool_calls: [{name: scenario_designer, args: {request: "Cover every uncovered delegation edge."}}]}
+  - when: {system_contains: "Crucible audit conductor", after_tool: scenario_designer}
+    respond: {tool_calls: [{name: test_runner, args: {request: "Run the audit including generated scenarios."}}]}
+  - when: {system_contains: "Crucible audit conductor", after_tool: test_runner}
+    respond: {tool_calls: [{name: leak_auditor, args: {request: "Confirm leaks in the latest audit."}}]}
+  - when: {system_contains: "Crucible audit conductor", after_tool: leak_auditor}
+    respond: {tool_calls: [{name: report_writer, args: {request: "Scripted audit completed; see findings."}}]}
+  - when: {system_contains: "Crucible audit conductor", after_tool: report_writer}
+    respond: {text: "Audit complete. {last_tool_result}"}
+  # specialists: call their tool once, then relay the result
+  - when: {system_contains: "topology analyst", first_turn: true}
+    respond: {tool_calls: [{name: lint_network, args: {}}]}
+  - when: {system_contains: "scenario designer", first_turn: true}
+    respond: {tool_calls: [{name: coverage_plan, args: {}}]}
+  - when: {system_contains: "test runner", first_turn: true}
+    respond: {tool_calls: [{name: run_audit, args: {include_generated: true}}]}
+  - when: {system_contains: "leak auditor", first_turn: true}
+    respond: {tool_calls: [{name: leak_report, args: {}}]}
+  - when: {system_contains: "report writer", first_turn: true}
+    respond: {tool_calls: [{name: render_report, args: {format: markdown, summary: "Scripted Crucible audit."}}]}
+default: {text: "{last_tool_result}"}
