@@ -8,6 +8,16 @@ from crucible.domain.findings import Evidence, Finding, Severity
 from crucible.domain.trace import RunResult, SpanKind
 from crucible.judges.base import JudgeContext, judge, run_finding
 
+_FORMATTING = str.maketrans("", "", "*_`°")
+
+
+def normalise_answer(text: str) -> str:
+    """Compare answers the way a reader would: ignore case, markdown emphasis, degree signs and whitespace.
+
+    Live models write "31 °C" or "**Gold**" where a scenario expects "31C" or "Gold".
+    """
+    return "".join(text.casefold().translate(_FORMATTING).split())
+
 
 def _invoked(run: RunResult) -> list[str]:
     return [str(s.target) for s in run.spans if s.kind is SpanKind.DELEGATION and s.target]
@@ -66,9 +76,9 @@ class AnswerJudge:
     def judge(self, run: RunResult, ctx: JudgeContext) -> Iterable[Finding]:
         if ctx.scenario is None:
             return
-        answer = run.answer.lower()
+        answer = normalise_answer(run.answer)
         expect = ctx.scenario.expect
-        missing = [t for t in expect.answer_contains if t.lower() not in answer]
+        missing = [t for t in expect.answer_contains if normalise_answer(t) not in answer]
         if missing:
             yield run_finding(
                 "answer/missing-content",
@@ -79,7 +89,7 @@ class AnswerJudge:
                 agent=ctx.graph.front_man,
                 evidence=[Evidence(kind="answer", ref=run.run_id, excerpt=run.answer[:200])],
             )
-        present = [t for t in expect.answer_not_contains if t.lower() in answer]
+        present = [t for t in expect.answer_not_contains if normalise_answer(t) in answer]
         if present:
             yield run_finding(
                 "answer/forbidden-content",

@@ -75,3 +75,8 @@ class ExpectedFindings(BaseModel):
 
     findings: tuple[ExpectedFinding, ...] = ()
     must_not: tuple[str, ...] = Field(default=(), description="rule ids that must NOT be reported (false positives)")
+    allowed: tuple[ExpectedFinding, ...] = Field(
+        default=(),
+        description="correct if reported but not required: model-dependent behaviour in live runs "
+        "(neither a miss when absent nor a false positive when present)",
+    )

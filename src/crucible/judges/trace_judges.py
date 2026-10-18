@@ -19,7 +19,7 @@ class PingPongJudge:
     """Two agents delegating to each other back and forth."""
 
     id = "ping-pong"
-    rule_ids = ("trace/ping-pong",)
+    rule_ids = ("trace/ping-pong", "trace/bounce")
 
     def judge(self, run: RunResult, ctx: JudgeContext) -> Iterable[Finding]:
         delegations = [s for s in run.spans if s.kind is SpanKind.DELEGATION and s.agent and s.target]
@@ -30,23 +30,41 @@ class PingPongJudge:
                 continue
             backward = counts.get((callee, caller), 0)
             pair = frozenset((caller, callee))
-            if pair in reported or min(forward, backward) < PING_PONG_MIN:
+            if pair in reported or min(forward, backward) < 1:
                 continue
             reported.add(pair)
             first, second = sorted(pair)
             spans = [s for s in delegations if {s.agent, s.target} == pair][:6]
-            yield run_finding(
-                "trace/ping-pong",
-                Severity.ERROR,
-                f"'{first}' and '{second}' delegated to each other {forward + backward} times "
-                f"({counts.get((first, second), 0)} / {counts.get((second, first), 0)}); the task never converged.",
-                run,
-                ctx,
-                agent=first,
-                evidence=[Evidence(kind="span", ref=s.id, excerpt=f"{s.agent} -> {s.target}") for s in spans],
-                remediation=f"Give '{first}' and '{second}' disjoint responsibilities and tell each when NOT to "
-                "delegate back; remove one direction of the edge.",
-            )
+            evidence = [Evidence(kind="span", ref=s.id, excerpt=f"{s.agent} -> {s.target}") for s in spans]
+            split = f"({counts.get((first, second), 0)} / {counts.get((second, first), 0)})"
+            if min(forward, backward) >= PING_PONG_MIN:
+                yield run_finding(
+                    "trace/ping-pong",
+                    Severity.ERROR,
+                    f"'{first}' and '{second}' delegated to each other {forward + backward} times {split}; "
+                    "the task never converged.",
+                    run,
+                    ctx,
+                    agent=first,
+                    evidence=evidence,
+                    remediation=f"Give '{first}' and '{second}' disjoint responsibilities and tell each when NOT to "
+                    "delegate back; remove one direction of the edge.",
+                )
+            else:
+                # Real models rarely loop forever, but a callee handing work back to its caller still doubles
+                # cost and latency and is the same design flaw (a delegation cycle) caught in the act.
+                yield run_finding(
+                    "trace/bounce",
+                    Severity.WARNING,
+                    f"Work bounced between '{first}' and '{second}' {split}: a callee delegated back to its caller "
+                    "before answering.",
+                    run,
+                    ctx,
+                    agent=first,
+                    evidence=evidence,
+                    remediation=f"Let one of '{first}' / '{second}' own the decision; remove the back-edge or tell "
+                    "the callee to answer from what it was given.",
+                )
 
 
 @judge
