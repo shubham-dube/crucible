@@ -16,6 +16,16 @@ ACKNOWLEDGEMENT = re.compile(
 )
 
 
+_FIGURE = re.compile(r"(?<![\w.])\d{2,}(?:[.,]\d+)?")
+_GROUNDING = (SpanKind.USER_INPUT, SpanKind.TOOL_RESULT, SpanKind.SYSTEM_PROMPT)
+
+
+def invented_figures(run: RunResult) -> list[str]:
+    """Multi-digit figures in the answer that no tool result, user input or instruction contains."""
+    grounded = {m.group(0) for s in run.spans if s.kind in _GROUNDING for m in _FIGURE.finditer(s.text)}
+    return sorted({m.group(0) for m in _FIGURE.finditer(run.answer)} - grounded)
+
+
 def _caller(span: Span) -> str | None:
     return agent_of(span.origin[:-1]) if len(span.origin) > 1 else None
 
@@ -35,14 +45,27 @@ class ErrorMaskedJudge:
             recovered = any(
                 s.kind is SpanKind.TOOL_RESULT and s.agent == error.agent and s.seq > error.seq for s in run.spans
             )
-            if recovered or acknowledged:
+            invented = invented_figures(run) if acknowledged else []
+            if recovered or (acknowledged and not invented):
                 continue
             caller = _caller(error) or ctx.graph.front_man
+            if invented:
+                # Live models often say "the service is down, but expect around 36°C": admitted, still invented.
+                severity = Severity.WARNING
+                message = (
+                    f"Tool '{error.agent}' failed ({error.text[:120]!r}); the answer admits it but still states "
+                    f"figures no tool returned ({', '.join(invented[:5])}): {run.answer[:120]!r}."
+                )
+            else:
+                severity = Severity.ERROR
+                message = (
+                    f"Tool '{error.agent}' failed ({error.text[:120]!r}) but the answer presents a confident result: "
+                    f"{run.answer[:120]!r}."
+                )
             yield run_finding(
                 "tool/error-masked",
-                Severity.ERROR,
-                f"Tool '{error.agent}' failed ({error.text[:120]!r}) but the answer presents a confident result: "
-                f"{run.answer[:120]!r}.",
+                severity,
+                message,
                 run,
                 ctx,
                 agent=caller,

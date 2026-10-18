@@ -338,7 +338,10 @@ def verify_fixes(
         candidates = [p for p in candidates if p.id in proposal_ids]
     scenarios = [*project.scenarios(spec).scenarios, *load_generated(audit.target).scenarios]
     workdir = _home() / "fixes" / audit_id
-    verdicts = [verify(AuditService(project), spec, audit, p, scenarios, workdir) for p in candidates]
+    # Verify with as many repetitions as the audit used: one clean run proves little for a stochastic model.
+    runs = audit.batch.runs if audit.batch is not None else ()
+    options = AuditOptions(repetitions=max((r.repetition for r in runs), default=0) + 1)
+    verdicts = [verify(AuditService(project), spec, audit, p, scenarios, workdir, options) for p in candidates]
     return {
         "audit_id": audit_id,
         "verdicts": [

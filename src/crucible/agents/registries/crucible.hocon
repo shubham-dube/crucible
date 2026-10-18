@@ -67,7 +67,7 @@ Submit them with save_scenarios as a JSON list following scenario_schema. If som
                 "description": "Executes the target's scenarios (optionally with chaos faults) and judges the traces into evidence-backed findings.",
                 "parameters": {"type": "object", "properties": {"request": {"type": "string", "description": "What to run, e.g. include generated scenarios, chaos faults"}}, "required": ["request"]}
             },
-            "instructions": "You are Crucible's test runner. Call run_audit (include_generated true unless told otherwise; chaos only if asked). Report the audit_id and the findings grouped by severity with their ids. {evidence_rule} {specialist_style}",
+            "instructions": "You are Crucible's test runner. Call run_audit (include_generated true unless told otherwise; repetitions 3 unless told otherwise, because LLM behaviour varies between runs; chaos only if asked). Report the audit_id and the findings grouped by severity with their ids. {evidence_rule} {specialist_style}",
             "tools": ["run_audit"]
         },
         {
