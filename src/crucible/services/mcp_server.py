@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from crucible.config.project import Project
-from crucible.services.agentic import network_path, scripted_network_path
+from crucible.services.agentic import agent_network_path
 
 TOOL_NAME = "crucible"
 
@@ -22,7 +22,7 @@ def prepare(home: Path, project_dir: Path, target: str, scripted: bool) -> dict[
     project.activate()
     registry = home / "mcp" / "registries"
     registry.mkdir(parents=True, exist_ok=True)
-    source = scripted_network_path(home) if scripted else network_path()
+    source = agent_network_path(home, scripted)
     config = load_config(source)
     (registry / f"{TOOL_NAME}.hocon").write_text(json.dumps(config, indent=1), encoding="utf-8")
     manifest = registry / "manifest.hocon"

@@ -10,6 +10,7 @@ import structlog
 
 from crucible.domain.scenario import Scenario
 from crucible.domain.trace import RunBatch, RunResult
+from crucible.execution.budget import BudgetGuard, default_guard
 from crucible.execution.canaries import plant
 from crucible.execution.ports import RunRequest, TargetAdapter
 
@@ -24,10 +25,17 @@ def new_id(prefix: str) -> str:
 class Runner:
     """Executes scenarios x repetitions sequentially (prompt capture is process-global, see prompt_capture)."""
 
-    def __init__(self, adapter: TargetAdapter, timeout_s: float = 120.0, chaos: Sequence[str] = ()) -> None:
+    def __init__(
+        self,
+        adapter: TargetAdapter,
+        timeout_s: float = 120.0,
+        chaos: Sequence[str] = (),
+        budget: BudgetGuard | None = None,
+    ) -> None:
         self.adapter = adapter
         self.timeout_s = timeout_s
         self.chaos = tuple(chaos)
+        self.budget = budget
 
     def run(
         self,
@@ -41,6 +49,7 @@ class Runner:
         batch_id = new_id("batch")
         started = datetime.now(UTC).isoformat()
         results: list[RunResult] = []
+        budget = self.budget or default_guard()
         for scenario in scenarios:
             for rep in range(repetitions):
                 planted, sensitive = plant(scenario)
@@ -53,7 +62,9 @@ class Runner:
                     timeout_s=self.timeout_s,
                     chaos=self.chaos,
                 )
+                budget.ensure()
                 result = self.adapter.run(request)
+                budget.charge("run", result.run_id, result.tokens, calls=len(result.llm_calls))
                 log.info("run finished", scenario=scenario.id, rep=rep, status=result.status.value)
                 results.append(result)
                 if on_result is not None:

@@ -41,6 +41,12 @@ dev = [
 [project.scripts]
 crucible = "crucible.interfaces.cli.app:main"
 
+[project.optional-dependencies]
+llm = [
+    "langchain-anthropic>=1.7.6",
+    "langchain-google-genai>=4.4.2",
+]
+
 [tool.ruff]
 line-length = 119
 target-version = "py313"

@@ -72,8 +72,16 @@ class Project:
         raise ConfigError(f"unknown target '{name}'; known: {[t.name for t in self.spec.targets]}")
 
     def network_path(self, target: TargetSpec) -> Path:
-        """Absolute path of a target's HOCON."""
-        return self.resolve(target.network)
+        """Absolute path of a target's HOCON (an LLM-overridden copy when ``CRUCIBLE_TARGET_LLM`` is set)."""
+        from crucible.config import get_settings
+
+        source = self.resolve(target.network)
+        settings = get_settings()
+        if not settings.target_llm:
+            return source
+        from crucible.integrations.neurosan.llm_override import parse_llm_spec, write_llm_variant
+
+        return write_llm_variant(source, parse_llm_spec(settings.target_llm), Path(settings.home) / "llm_variants")
 
     def scenarios(self, target: TargetSpec) -> ScenarioSuite:
         """Load a target's hand-written scenarios (empty suite if none)."""

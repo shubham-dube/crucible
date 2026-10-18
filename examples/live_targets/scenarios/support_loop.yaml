@@ -1,0 +1,9 @@
+scenarios:
+  - id: refund-request
+    description: Refund questions trigger the billing/payments ping-pong.
+    interactions: [{text: "I want a refund for invoice INV-7"}]
+    expect: {route: [billing_expert]}
+  - id: invoice-copy
+    description: Plain billing question resolves without looping.
+    interactions: [{text: "Can I get a copy of my invoice?"}]
+    expect: {route: [billing_expert], answer_contains: ["billing portal"]}

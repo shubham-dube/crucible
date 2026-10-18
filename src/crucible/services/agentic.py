@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from crucible.config import get_settings
 from crucible.config.project import Project
+from crucible.domain.trace import TokenUsage
 
 DEFAULT_REQUEST = "Audit this agent network thoroughly and tell me whether it is safe to merge."
 
@@ -25,6 +26,7 @@ class AgenticAuditResult(BaseModel):
     report_path: str | None = None
     delegations: tuple[str, ...] = Field(default=(), description="Crucible's own agent hand-offs, in order")
     duration_s: float = 0.0
+    tokens: TokenUsage = Field(default_factory=TokenUsage, description="Crucible's own agents (not the targets)")
 
 
 def network_path() -> Path:
@@ -40,21 +42,30 @@ def scripted_network_path(home: Path) -> Path:
     """
     import json
 
+    from crucible.integrations.neurosan.llm_override import override_llm
     from crucible.integrations.neurosan.loader import load_config
 
-    config = load_config(network_path())
     scripted = {
         "class": "crucible.integrations.neurosan.scripted_llm.ScriptedChatModel",
         "script_path": str(script_path()),
     }
-    config["llm_config"] = scripted
-    for spec in config.get("tools") or []:
-        if isinstance(spec, dict) and "llm_config" in spec:  # Neuro-SAN's filters copy llm_config into each agent
-            spec["llm_config"] = dict(scripted)
+    config = override_llm(load_config(network_path()), scripted)
     target = home / "agents" / "crucible_scripted.hocon"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(config, indent=1), encoding="utf-8")
     return target
+
+
+def agent_network_path(home: Path, scripted: bool = False) -> Path:
+    """The network to run: keyless variant, an LLM-overridden copy (``CRUCIBLE_AGENT_LLM``), or the bundled one."""
+    if scripted:
+        return scripted_network_path(home)
+    agent_llm = get_settings().agent_llm
+    if agent_llm:
+        from crucible.integrations.neurosan.llm_override import parse_llm_spec, write_llm_variant
+
+        return write_llm_variant(network_path(), parse_llm_spec(agent_llm), home / "llm_variants")
+    return network_path()
 
 
 def script_path() -> Path:
@@ -76,7 +87,12 @@ def run_agentic_audit(
     project.activate()  # tool paths must be valid before any activation factory is built
     project.target(target)  # fail fast on unknown target
     chaos_prepper.register()
-    path = scripted_network_path(Path(get_settings().home)) if scripted else network_path()
+    from crucible.execution.budget import default_guard
+
+    budget = default_guard()
+    budget.ensure()
+    path = agent_network_path(Path(get_settings().home), scripted)
+    tokens = TokenUsage()
     start = time.monotonic()
     session = AgentSessionFactory().create_session(
         "direct", str(path), use_direct=True, metadata={"user_id": "crucible"}
@@ -95,11 +111,20 @@ def run_agentic_audit(
         if structure.get("invoking_start"):
             caller = (message.get("origin") or [{}])[-1].get("tool")
             delegations.append(f"{caller} -> {structure.get('invoked_agent_name')}")
+        if "total_tokens" in structure and len(message.get("origin") or []) <= 1:  # front man's running total
+            tokens = TokenUsage(
+                total=int(structure.get("total_tokens") or 0),
+                prompt=int(structure.get("prompt_tokens") or 0),
+                completion=int(structure.get("completion_tokens") or 0),
+                cost_usd=float(structure.get("total_cost") or 0.0),
+            )
         if message.get("type") == 101:
             answer = str(message.get("text") or "")
             returned = message.get("sly_data") or {}
+    budget.charge("agentic", target, tokens)
     return AgenticAuditResult(
         answer=answer,
+        tokens=tokens,
         audit_ids=tuple(returned.get(AUDITS_KEY) or ()),
         report_path=returned.get(REPORT_KEY),
         delegations=tuple(delegations),

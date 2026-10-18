@@ -36,7 +36,10 @@ def test_scripted_agentic_audit_finds_leak() -> None:
 
 
 @pytest.mark.live
-@pytest.mark.skipif(not os.environ.get("ANTHROPIC_API_KEY"), reason="needs ANTHROPIC_API_KEY")
+@pytest.mark.skipif(
+    not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("CRUCIBLE_AGENT_LLM")),
+    reason="needs ANTHROPIC_API_KEY, or CRUCIBLE_AGENT_LLM + its provider key",
+)
 @pytest.mark.usefixtures("crucible_home")
 def test_live_agentic_audit_fragile_weather() -> None:
     result = run_agentic_audit(ZOO, "fragile_weather")

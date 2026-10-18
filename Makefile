@@ -1,7 +1,7 @@
 .PHONY: install lint fmt type test test-e2e test-all check
 
 install:
-	uv sync
+	uv sync --all-extras
 
 lint:
 	uv run ruff check .

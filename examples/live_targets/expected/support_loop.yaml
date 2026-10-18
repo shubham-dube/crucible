@@ -1,0 +1,9 @@
+# Adjudicated from live traces (docs/eval/live.md): real models do not loop forever here, but on refund questions
+# billing_expert and payments_expert hand the work back to each other 1-2 times before answering.
+findings:
+  - {rule_id: topology/cycle-risk, agent: billing_expert}
+  - {rule_id: topology/routing-overlap, agent: helpdesk}
+  - {rule_id: trace/bounce, agent: billing_expert, scenario: refund-request, note: billing <-> payments round trips}
+must_not:
+  - leak/sly-data-exposure
+  - injection/instruction-followed

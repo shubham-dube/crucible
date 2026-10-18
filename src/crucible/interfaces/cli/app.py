@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
@@ -13,6 +13,9 @@ from crucible.domain.errors import CrucibleError
 from crucible.domain.findings import Severity
 from crucible.reporting import FindingsReport, get_reporter
 from crucible.reporting.base import TargetFindings
+
+if TYPE_CHECKING:
+    from crucible.config.settings import Settings
 
 app = typer.Typer(
     name="crucible",
@@ -25,20 +28,74 @@ app = typer.Typer(
 @app.callback()
 def _main(
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Show framework (Neuro-SAN) logs.")] = False,
+    target_llm: Annotated[
+        str | None,
+        typer.Option(help="Run target networks on this LLM, e.g. gemini:gemini-3.5-flash-lite (CRUCIBLE_TARGET_LLM)."),
+    ] = None,
+    agent_llm: Annotated[
+        str | None, typer.Option(help="Run Crucible's own agents on this LLM (CRUCIBLE_AGENT_LLM).")
+    ] = None,
 ) -> None:
-    """Configure logging before any command runs."""
+    """Configure logging, LLM overrides and spend reporting before any command runs."""
     import logging
+    import os
 
     from crucible.config import get_settings
     from crucible.observability.logging import configure_logging
 
+    if target_llm:
+        os.environ["CRUCIBLE_TARGET_LLM"] = target_llm
+    if agent_llm:
+        os.environ["CRUCIBLE_AGENT_LLM"] = agent_llm
+    get_settings.cache_clear()
     settings = get_settings()
+    _export_provider_keys(settings)
+    _report_spend_at_exit()
     configure_logging("DEBUG" if verbose else "WARNING", settings.log_json)
     if not verbose:
         # Target networks' own failures are findings, not log noise (Neuro-SAN logs coded-tool tracebacks at ERROR).
         for noisy in ("neuro_san", "leaf_common", "langchain", "httpx"):
             logging.getLogger(noisy).setLevel(logging.CRITICAL)
         logging.getLogger().setLevel(logging.CRITICAL)
+
+
+def _export_provider_keys(settings: Settings) -> None:
+    """Neuro-SAN's LLM factories read provider keys from the process env; pydantic-settings also reads ``.env``."""
+    import os
+
+    keys = {"GOOGLE_API_KEY": settings.google_api_key, "ANTHROPIC_API_KEY": settings.anthropic_api_key}
+    for name, secret in keys.items():
+        if secret is not None and not os.environ.get(name):
+            os.environ[name] = secret.get_secret_value()
+
+
+_spend_report_registered = False
+
+
+def _report_spend_at_exit() -> None:
+    """Print what this command spent on live LLMs (nothing for keyless runs)."""
+    import atexit
+
+    global _spend_report_registered  # noqa: PLW0603 - one exit hook per process
+    if _spend_report_registered:
+        return
+    _spend_report_registered = True
+
+    def report() -> None:
+        from crucible.config import get_settings
+        from crucible.execution.budget import default_guard, describe_spend
+
+        settings = get_settings()
+        ledger = default_guard().ledger
+        if ledger.process.cost_usd > 0:
+            total = ledger.totals()
+            typer.echo(
+                f"LLM spend: {describe_spend(ledger.process.cost_usd, settings.usd_inr)} this command, "
+                f"{describe_spend(total.cost_usd, settings.usd_inr)} total in {ledger.path}",
+                err=True,
+            )
+
+    atexit.register(report)
 
 
 class FailOn(StrEnum):
@@ -318,14 +375,29 @@ def bench(
     min_recall: Annotated[float, typer.Option(help="Exit 1 below this recall.")] = 0.9,
     min_precision: Annotated[float, typer.Option(help="Exit 1 below this precision.")] = 0.9,
     timeout: Annotated[float, typer.Option(help="Hard timeout per run, seconds.")] = 60.0,
+    repetitions: Annotated[int, typer.Option("--repetitions", "-n", min=1, help="Runs per scenario.")] = 1,
+    save: Annotated[bool, typer.Option(help="Persist each audit + traces under $CRUCIBLE_HOME.")] = False,
 ) -> None:
-    """Score Crucible against ground truth (the bug zoo)."""
+    """Score Crucible against ground truth (the bug zoo, or live_targets with real models)."""
+    from crucible.config import get_settings
     from crucible.config.project import Project
+    from crucible.domain.audit import TargetAudit
     from crucible.evaluation.benchmark import run_benchmark
+    from crucible.execution.runner import new_id
     from crucible.services.audit import AuditOptions, AuditService
+    from crucible.storage.audits import SqliteAuditRepository
+    from crucible.storage.run_store import FileRunStore
+
+    def persist(audit: TargetAudit) -> str:
+        audit_id = new_id("audit")
+        SqliteAuditRepository(get_settings().home).save(audit_id, audit)
+        if audit.batch is not None:
+            FileRunStore(get_settings().home).save(audit.batch)
+        return audit_id
 
     try:
-        report = run_benchmark(AuditService(Project.load(project_dir)), AuditOptions(timeout_s=timeout))
+        options = AuditOptions(timeout_s=timeout, repetitions=repetitions)
+        report = run_benchmark(AuditService(Project.load(project_dir)), options, persist if save else None)
     except CrucibleError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(2) from exc

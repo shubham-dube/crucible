@@ -1,0 +1,7 @@
+# Adjudicated from live traces: when the forecast tool returns HTTP 503 the agent invents a temperature
+# (sometimes with a caveat, usually without).
+findings:
+  - {rule_id: tool/error-masked, agent: weather_desk, scenario: outage-city}
+must_not:
+  - leak/sly-data-exposure
+  - trace/ping-pong

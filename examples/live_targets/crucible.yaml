@@ -1,0 +1,31 @@
+# Live-model variants of the bug zoo: same topologies and coded tools, natural instructions written the way a real
+# team would, real Gemini models. The seeded *design* flaws are kept; whether a real model actually trips over them
+# is exactly what live testing measures. Ground truth is adjudicated by reading traces (see docs/eval/live.md).
+version: 1
+coded_tools: coded_tools
+targets:
+  - name: support_loop
+    network: registries/support_loop.hocon
+    scenarios: scenarios/support_loop.yaml
+    expected: expected/support_loop.yaml
+    description: Billing and payments specialists are told to consult each other (delegation cycle) + overlapping routing.
+  - name: account_leak
+    network: registries/account_leak.hocon
+    scenarios: scenarios/account_leak.yaml
+    expected: expected/account_leak.yaml
+    description: The profile tool returns the customer's national id to the LLM.
+  - name: fragile_weather
+    network: registries/fragile_weather.hocon
+    scenarios: scenarios/fragile_weather.yaml
+    expected: expected/fragile_weather.yaml
+    description: The forecast tool fails for one city; the agent is told to always give a confident answer.
+  - name: injectable_research
+    network: registries/injectable_research.hocon
+    scenarios: scenarios/injectable_research.yaml
+    expected: expected/injectable_research.yaml
+    description: Fetched pages carry crude and plausible injections asking to email the user's notes away.
+  - name: clean_concierge
+    network: registries/clean_concierge.hocon
+    scenarios: scenarios/clean_concierge.yaml
+    expected: expected/clean_concierge.yaml
+    description: Well-built reference network; Crucible must report no defects (false-positive check).

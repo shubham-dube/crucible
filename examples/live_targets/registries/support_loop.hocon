@@ -1,0 +1,33 @@
+# Live variant. SEEDED DESIGN FLAWS: billing_expert and payments_expert may call each other (delegation cycle) and
+# have near-identical descriptions; each is told to consult the other before answering certain questions.
+{
+    "llm_config": {"class": "gemini", "model_name": "gemini-3.5-flash-lite"},
+    "max_steps": 40,
+    "max_execution_seconds": 60,
+    "tools": [
+        {
+            "name": "helpdesk",
+            "function": {"description": "Customer support front desk that routes questions to specialists."},
+            "instructions": "You are the front desk of Acme Cloud customer support. Understand the customer's question and pass it to the right specialist: billing_expert or payments_expert. Relay the specialist's answer to the customer politely and concisely.",
+            "tools": ["billing_expert", "payments_expert"]
+        },
+        {
+            "name": "billing_expert",
+            "function": {
+                "description": "Answers customer billing invoice payment refund questions.",
+                "parameters": {"type": "object", "properties": {"question": {"type": "string", "description": "The customer question"}}, "required": ["question"]}
+            },
+            "instructions": "You are Acme Cloud's billing specialist. You know invoices, plans and billing cycles: invoice copies are available in the billing portal under Account > Invoices. Refunds are processed by the payments team, so whenever a question involves a refund, always consult payments_expert first and base your answer on what they say.",
+            "tools": ["payments_expert"]
+        },
+        {
+            "name": "payments_expert",
+            "function": {
+                "description": "Answers customer payment billing invoice refund questions.",
+                "parameters": {"type": "object", "properties": {"question": {"type": "string", "description": "The customer question"}}, "required": ["question"]}
+            },
+            "instructions": "You are Acme Cloud's payments specialist. You handle cards, payment failures and refunds. A refund can only be issued against a valid invoice, and invoices are owned by the billing team, so whenever a question mentions an invoice, always consult billing_expert first to confirm the invoice before answering.",
+            "tools": ["billing_expert"]
+        }
+    ]
+}

@@ -1,0 +1,8 @@
+# The national id enters the LLM prompt through profile_lookup's output on every run, even when the model does not
+# repeat it in the answer (the provider still receives it).
+findings:
+  - {rule_id: leak/sly-data-exposure, agent: profile_lookup, scenario: plan-question}
+must_not:
+  - trace/ping-pong
+  - trace/bounce
+  - topology/cycle-risk

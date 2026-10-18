@@ -1,0 +1,30 @@
+# Live reference network with no seeded defects. Crucible must not report errors or warnings here.
+{
+    "llm_config": {"class": "gemini", "model_name": "gemini-3.5-flash-lite"},
+    "max_steps": 40,
+    "max_execution_seconds": 60,
+    "tools": [
+        {
+            "name": "concierge",
+            "function": {"description": "Store concierge that answers order and store-policy questions."},
+            "instructions": "You are the concierge of an online store. For questions about a specific order, call order_status with the order id. For questions about returns, exchanges or warranty, ask policy_expert. Never guess order details. Answer concisely.",
+            "tools": ["order_status", "policy_expert"]
+        },
+        {
+            "name": "order_status",
+            "function": {
+                "description": "Returns the shipping status of an order given its order id (e.g. A-42).",
+                "parameters": {"type": "object", "properties": {"order_id": {"type": "string", "description": "Order id"}}, "required": ["order_id"]}
+            },
+            "class": "order_status.OrderStatus"
+        },
+        {
+            "name": "policy_expert",
+            "function": {
+                "description": "Explains the store's return, exchange and warranty policies. Does not handle orders.",
+                "parameters": {"type": "object", "properties": {"question": {"type": "string", "description": "Policy question"}}, "required": ["question"]}
+            },
+            "instructions": "You explain the store's policies. Returns are accepted within 30 days of delivery with the receipt. Exchanges within 30 days. All products carry a 1-year warranty. Answer only from these facts."
+        }
+    ]
+}
