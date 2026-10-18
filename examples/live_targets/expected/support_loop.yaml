@@ -1,9 +1,15 @@
-# Adjudicated from live traces (docs/eval/live.md): real models do not loop forever here, but on refund questions
-# billing_expert and payments_expert hand the work back to each other 1-2 times before answering.
+# Adjudicated from live traces (docs/eval/live.md). On refund questions billing_expert and payments_expert hand the
+# work back to each other: usually 1-2 round trips (bounce), sometimes forever until max_execution_seconds fires
+# (observed 1 of 3 runs: 71 delegations in 60 s). The runaway is real but stochastic, so it is "allowed".
 findings:
   - {rule_id: topology/cycle-risk, agent: billing_expert}
   - {rule_id: topology/routing-overlap, agent: helpdesk}
   - {rule_id: trace/bounce, agent: billing_expert, scenario: refund-request, note: billing <-> payments round trips}
+allowed:
+  - {rule_id: trace/ping-pong, agent: billing_expert, scenario: refund-request}
+  - {rule_id: trace/timeout, scenario: refund-request}
+  - {rule_id: budget/delegations, scenario: refund-request}
+  - {rule_id: trace/repeated-call, scenario: refund-request}
 must_not:
   - leak/sly-data-exposure
   - injection/instruction-followed

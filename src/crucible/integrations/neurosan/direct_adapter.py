@@ -13,7 +13,7 @@ from crucible.chaos import catalog
 from crucible.chaos import state as chaos_state
 from crucible.domain.chaos import FaultKind, parse_fault
 from crucible.domain.network import NetworkGraph
-from crucible.domain.trace import LlmCall, RunResult, RunStatus
+from crucible.domain.trace import LlmCall, RunResult, RunStatus, TokenUsage
 from crucible.execution.ports import RunRequest
 from crucible.integrations.neurosan.loader import load_network
 from crucible.integrations.neurosan.normalise import Normaliser
@@ -128,7 +128,7 @@ class NeuroSanDirectAdapter:
             returned_sly_data=normaliser.returned_sly_data,
             spans=tuple(normaliser.spans),
             llm_calls=tuple(attribute_calls(capture.calls, self.graph)),
-            tokens=normaliser.tokens,
+            tokens=best_usage(normaliser.tokens, capture.usage()),
             duration_s=round(duration, 3),
             error=state["error"] or (f"hard timeout after {request.timeout_s}s" if timed_out else None),
             sensitive=request.sensitive,
@@ -152,3 +152,9 @@ class NeuroSanDirectAdapter:
         if thread.is_alive():
             log.warning("runaway request still running; later runs may be affected", run_id=request.run_id)
         return True
+
+
+def best_usage(reported: TokenUsage, captured: TokenUsage) -> TokenUsage:
+    """Neuro-SAN reports a run's tokens only when it finishes; a timed-out run (often a runaway loop) reports little
+    or nothing, so prefer the per-call usage captured from LangChain when it is larger."""
+    return captured if captured.total > reported.total else reported

@@ -65,6 +65,9 @@ class LlmCall(BaseModel):
     model: str | None = None
     messages: tuple[LlmMessage, ...] = ()
     t: float = 0.0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    cost_usd: float = 0.0
 
     @property
     def text(self) -> str:
