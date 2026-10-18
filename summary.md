@@ -42,12 +42,18 @@ which led to the hierarchical fix-lead/investigator structure.
   enforced in CI.
 - **Verified fix loop on the zoo**: ping-pong fixed by removing a back-edge (4 findings resolved, nothing new);
   masked error and prompt injection fixed by instruction patches; the leak correctly flagged as a code change.
-- 156 automated tests (unit, Neuro-SAN integration, API, MCP end-to-end); the dashboard was verified with Playwright.
+- **Live validation on Gemini** (realistic target networks, 3 repetitions per scenario): recall **100%**, precision
+  **100%** on fresh runs. Real models looped (2 of 13 runs ran until the 60 s limit), leaked a national id into the
+  prompt in 15 of 15 runs, and invented forecasts after a tool outage in 13 of 13. Live testing also exposed six
+  Crucible defects, all fixed and covered by tests. Full results and limits: `docs/eval/live.md`.
+- Crucible's own agents ran live on Gemini with correct NOT-SAFE verdicts, and every cited id was checked against the
+  stored audits. All live testing cost about ₹26.
+- 174 automated tests (unit, Neuro-SAN integration, API, MCP end-to-end); the dashboard was verified with Playwright.
 
 ## Delivered surfaces
 CLI (`lint, run, audit, chaos, plan, fix, diff, bench, serve, mcp-server …`), GitHub Action (SARIF, sticky PR
 comment, gate on new findings), REST + SSE API with API keys, Next.js dashboard, and an **MCP tool served by
-Neuro-SAN's own server**. Data used: synthetic only.
+Neuro-SAN's own server**. Data used: synthetic only. Demo video: `docs/assets/demo/crucible-demo.mp4` (3 min).
 
 ## Impact
 Every team building agent networks needs a merge gate for agent behaviour, not just answers. Crucible turns

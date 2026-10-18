@@ -51,16 +51,11 @@ Your own networks: add a `crucible.yaml` next to them (see [examples/targets/cru
 Dashboard + API: [web/README.md](web/README.md) · CI: [docs/guides/github-action.md](docs/guides/github-action.md) ·
 MCP: [docs/guides/mcp.md](docs/guides/mcp.md) · Deploy: [docs/guides/deploy.md](docs/guides/deploy.md)
 
-## Learn
-**Agents, Traced**: an interactive course from LLM calls to multi-agent networks, MCP, Neuro-SAN and agent testing,
-built on Crucible's real traces. Source in [learn/](learn/) (published as a claude.ai Artifact; `python learn/tools/build_static.py`
-builds a static copy). Runnable examples: [learn/examples/](learn/examples/).
-
 ## Documentation
-- [Hackathon summary](docs/hackathon/summary.md) · [Architecture for reviewers](docs/hackathon/architecture.md) ·
-  [Demo script](docs/hackathon/demo-script.md)
+- [Project summary](summary.md) · [Architecture for reviewers](architecture.md) · [Demo script](docs/demo-script.md)
 - [PRD](docs/PRD.md) · [Architecture](docs/architecture/overview.md) · [Neuro-SAN integration](docs/architecture/neurosan-integration.md) · [ADRs](docs/adr/)
-- [Roadmap](docs/plan/ROADMAP.md) · [Progress](docs/PROGRESS.md) · [Handover](docs/HANDOVER.md) · [Security](SECURITY.md)
+- [Live evaluation](docs/eval/live.md) · [Benchmark](docs/eval/benchmark.md) · [Manual testing](docs/guides/manual-testing.md) ·
+  [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 ## Development
 ```bash

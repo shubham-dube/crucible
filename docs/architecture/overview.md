@@ -47,7 +47,7 @@ Coded tools: crucible.integrations.neurosan.agent_tools (thin) -> crucible.servi
 ```
 Raw target sly_data and canaries never enter Crucible's own LLM prompts; agents see finding ids, rule ids and redacted excerpts.
 
-## Packages (see `docs/process/CONVENTIONS.md` for layering rules)
+## Packages (see `CONTRIBUTING.md` for layering rules)
 | Package | Responsibility | Key types |
 |---|---|---|
 | `domain` | Models shared everywhere | `NetworkGraph`, `AgentNode`, `Edge`, `Finding`, `Evidence`, `Scenario`, `Run`, `Trace`, `Span`, `FaultSpec`, `FixProposal` |

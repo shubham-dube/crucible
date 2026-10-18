@@ -1,4 +1,4 @@
-# Engineering conventions
+# Contributing: engineering conventions
 
 ## Repository layout
 ```
@@ -18,11 +18,12 @@ src/crucible/
   reporting/       reporters (markdown/json/sarif/junit)
   storage/         repository ports + sqlite/postgres impls, artifact store
   interfaces/      cli/ (typer), api/ (FastAPI), worker/
-agents/            Crucible's own Neuro-SAN network (registries/ + coded_tools/)
-examples/targets/  bug zoo: target networks with seeded defects + expected findings
+src/crucible/agents/  Crucible's own Neuro-SAN network (registries/ + scripted LLM script)
+examples/targets/  bug zoo: target networks with seeded defects + expected findings (keyless)
+examples/live_targets/  the same flaws with natural instructions, for live-model runs
 tests/             unit/ (mirrors src), integration/, e2e/
 web/               Next.js dashboard
-docs/              PRD, architecture, ADRs, plans, process, handover
+docs/              PRD, architecture, ADRs, evaluation, guides, demo script
 ```
 
 ## Layering

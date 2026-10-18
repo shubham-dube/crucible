@@ -41,8 +41,11 @@
 - 0002: in-process execution with session reuse (create ≈ 3 s, chat ≈ 30 ms); prompt capture serialised; hard
   timeouts abandon + drain rather than close a session (closing broke the next session).
 - 0003: Crucible's network packaging, runtime-generated keyless variant, no prompt capture on the outer session.
+- 0004: live-LLM validation: run any network on another model (`--target-llm`, `--agent-llm`), price every LLM call,
+  enforce a spend budget, and score live behaviour against ground truth adjudicated from traces.
 
 ## Evaluation loops
 1. scenario_designer → save_scenarios validation (invalid scenarios are rejected with reasons) → re-audit.
 2. fix_lead: fix_proposer → fix_verifier re-audits a patched copy → rejection reasons go back (max 2 rounds).
-3. The bug-zoo benchmark scores Crucible itself (recall/precision) on every CI run.
+3. The bug-zoo benchmark scores Crucible itself (recall/precision) on every CI run; `examples/live_targets` repeats
+   it on real Gemini models (`docs/eval/live.md`).

@@ -3,7 +3,8 @@
 Date: 2026-10-17 · Status: Accepted
 
 ## Context
-Crucible is built incrementally across ephemeral sessions. Decisions must survive without chat history.
+Crucible is built incrementally, module by module. Every non-obvious decision is recorded in the repository so that
+contributors and reviewers can follow why the system looks the way it does.
 
 ## Decisions
 1. **ADRs** in `docs/adr/NNNN-title.md` for every non-obvious decision.
