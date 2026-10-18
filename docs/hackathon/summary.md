@@ -15,7 +15,7 @@ Neuro-SAN's own test framework checks only final text and returned data.
 
 ## The solution
 Crucible points at a Neuro-SAN network and runs a full QA pipeline — **itself implemented as a Neuro-SAN network**:
-1. **Topology lint** (11 rules + Neuro-SAN's validators): cycles, unreachable agents, overlapping routing
+1. **Topology lint** (12 rules + Neuro-SAN's validators): cycles, unreachable agents, overlapping routing
    descriptions, unbounded budgets, wildcard sly_data allow-lists.
 2. **Coverage-driven scenarios**: measures which delegation edges are exercised; designs scenarios for the gaps
    plus adversarial probes; exports Neuro-SAN-native test cases.

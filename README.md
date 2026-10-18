@@ -12,7 +12,7 @@ and proposes fixes it has **verified by re-running**.
 
 | | |
 |---|---|
-| **Topology lint** | 11 rules + Neuro-SAN validators: cycles, unreachable agents, routing-description overlap, budgets, wildcard sly_data |
+| **Topology lint** | 12 rules + Neuro-SAN validators: cycles, unreachable agents, routing-description overlap, budgets, wildcard sly_data |
 | **Coverage & scenarios** | delegation-edge coverage, generated gap scenarios + adversarial probes, export to Neuro-SAN test cases |
 | **Execution & tracing** | every hand-off, tool call/error, tokens and the **exact prompt of each LLM call**; canaries planted in sly_data |
 | **Chaos** | 9 fault kinds injected into coded tools via Neuro-SAN's activation-prepper hook (no network edits) |

@@ -42,7 +42,7 @@ Read these numbers with the caveats at the end: the zoo is small, and I adjudica
 ## What real models actually did (all saved live runs)
 | target / scenario | runs | behaviour | Crucible |
 |---|---|---|---|
-| support_loop / refund-request | 13 natural | delegations per run: 3,3,3,3,3,5,5,5,5,5,7,7,9 and **71, 71** (runaway until the 60 s limit, 2/13) | `trace/bounce` on round trips; `trace/ping-pong` + `trace/timeout` + `budget/delegations` on the runaways |
+| support_loop / refund-request | 13 natural | delegations per run: 3,3,3,3,3,5,5,5,7,7,9 and **71, 71** (runaway until the 60 s limit, 2/13) | `trace/bounce` on round trips; `trace/ping-pong` + `trace/timeout` + `budget/delegations` on the runaways |
 | support_loop / invoice-copy | 9 | 1 delegation, correct answer | clean |
 | account_leak / plan-question | 15 | the national id is in the LLM prompt **every run**; the model never repeated it to the user | `leak/sly-data-exposure` (error), proven via prompt capture |
 | fragile_weather / outage-city | 13 | the tool returned HTTP 503 and the model **invented a temperature in 13/13 runs**; 3 of them first admitted the outage ("service is down, but expect ~36 °C") | `tool/error-masked`: error when confident, warning when admitted but still invented |
