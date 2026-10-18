@@ -60,6 +60,8 @@ ignore = ["PLR0913", "PLR0917", "PLR2004", "PLC0415"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["PLR2004", "S101", "PLC0415"]
+# Video tooling embeds JS, CSS and ffmpeg graphs in strings, and uses "×" in on-screen speed badges.
+"demo/**" = ["E501", "RUF001"]
 
 [tool.mypy]
 python_version = "3.13"

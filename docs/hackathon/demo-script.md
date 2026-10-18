@@ -1,4 +1,9 @@
-# Demo script (≈5 minutes)
+# Demo script
+
+**Recorded video:** [docs/assets/demo/crucible-demo.mp4](../assets/demo/crucible-demo.mp4) (3:00). Its shot list and
+narration are in [demo/script.md](../../demo/script.md), and the pipeline that rebuilds it is in [demo/README.md](../../demo/README.md).
+
+The live walkthrough below is for presenting in person (about 5 minutes).
 
 Setup (once): `uv sync`, `cd web && pnpm install && pnpm build`.
 Terminal A: `CRUCIBLE_PROJECTS="zoo=examples/targets" CRUCIBLE_API_KEYS=demo uv run crucible serve --port 8765`

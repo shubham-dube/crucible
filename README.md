@@ -3,7 +3,9 @@
 **Chaos, fuzz and regression QA for multi-agent networks — an agent network that tests agent networks.**
 Built on [Neuro-SAN](https://github.com/cognizant-ai-lab/neuro-san).
 
-![Audit with a verified fix](docs/assets/ui-4-fixes.png)
+[![Demo video: Crucible, 3 minutes](docs/assets/demo/crucible-demo-poster.png)](docs/assets/demo/crucible-demo.mp4)
+
+**[▶ Watch the 3-minute demo](docs/assets/demo/crucible-demo.mp4)** (live audits on Gemini, narrated, captioned)
 
 Multi-agent systems fail in ways final-answer evals never see: specialists **ping-pong** a task until the budget dies,
 tools **fail while the agent answers confidently**, fetched content **injects instructions**, and private data meant
