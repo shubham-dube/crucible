@@ -515,6 +515,9 @@ def fix(
         bool, typer.Option("--diff/--no-diff", help="Print the config diff of accepted fixes.")
     ] = True,
     timeout: Annotated[float, typer.Option(help="Hard timeout per run, seconds.")] = 60.0,
+    repetitions: Annotated[
+        int, typer.Option("--repetitions", "-n", min=1, help="Runs per scenario (live models: use 3+).")
+    ] = 1,
 ) -> None:
     """Propose fixes for a target's findings and keep only those verified by re-running the audit."""
     import shutil
@@ -529,7 +532,8 @@ def fix(
         service = AuditService(Project.load(project_dir))
         spec = service.project.target(target)
         workdir = Path(get_settings().home) / "fixes" / new_id("fix")
-        audit, verdicts = fix_target(service, spec, workdir, options=AuditOptions(timeout_s=timeout))
+        options = AuditOptions(timeout_s=timeout, repetitions=repetitions)
+        audit, verdicts = fix_target(service, spec, workdir, options=options)
     except CrucibleError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(2) from exc

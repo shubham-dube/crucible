@@ -135,3 +135,40 @@ class ToolMissingParams:
                     agent=name,
                     remediation="Declare function.parameters with types, descriptions and 'required'.",
                 )
+
+
+def _identifier_like(name: str) -> bool:
+    """Agent names that cannot be ordinary prose words (``billing_expert``, ``WebFetch``, ``tool2``)."""
+    return "_" in name or any(c.isdigit() for c in name) or name != name.lower()
+
+
+@rule
+class DanglingReference:
+    """Instructions that tell an agent to use an agent it cannot call.
+
+    Live models do not error on this; they *pretend*: "(Consulting billing_expert...) the invoice is confirmed".
+    Typical cause: an edge was removed (often to break a cycle) but the instructions still mention it.
+    Only identifier-like names are matched, so plain words (``forecast``) never count as references.
+    """
+
+    id = "topology/dangling-reference"
+    severity = Severity.WARNING
+    summary = "Instructions mention an agent this agent cannot call"
+
+    def check(self, graph: NetworkGraph, config: LintConfig) -> Iterable[Finding]:
+        for name, node in graph.nodes.items():
+            if node.kind is not AgentKind.LLM_AGENT or not node.instructions:
+                continue
+            callable_ = set(node.tools)
+            for other in sorted(graph.nodes):
+                if other == name or other in callable_ or not _identifier_like(other):
+                    continue
+                if re.search(rf"(?<![\w-]){re.escape(other)}(?![\w-])", node.instructions):
+                    yield make_finding(
+                        self,
+                        graph,
+                        f"'{name}' instructions mention '{other}', which '{name}' cannot call; a model may pretend "
+                        "to consult it and invent the result.",
+                        agent=name,
+                        remediation=f"Give '{name}' the '{other}' tool, or drop the reference from its instructions.",
+                    )

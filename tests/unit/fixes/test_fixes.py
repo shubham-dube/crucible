@@ -99,3 +99,30 @@ def test_budget_proposal_only_when_missing() -> None:
     assert {o.key for o in proposal.ops} == {"max_execution_seconds", "max_steps"}
     bounded = build_graph({"tools": [agent("f")], "max_steps": 50, "max_execution_seconds": 30}, "n")
     assert propose([finding("trace/timeout", None)], bounded, {}) == []
+
+
+def test_cycle_proposal_drops_instructions_naming_the_removed_agent() -> None:
+    from tests.helpers import agent
+
+    from crucible.integrations.neurosan.loader import build_graph
+    from crucible.topology.rules import LintConfig, registry
+
+    config = {
+        "max_steps": 50,
+        "max_execution_seconds": 60,
+        "tools": [
+            agent("desk", tools=["billing_expert", "payments_expert"]),
+            agent("billing_expert", tools=["payments_expert"], instructions="Billing. Ask payments_expert."),
+            agent("payments_expert", tools=["billing_expert"], instructions="Payments. Ask billing_expert."),
+        ],
+    }
+    graph = build_graph(config, "t", "t.hocon")
+    bounce = finding("trace/bounce", "billing_expert", "between 'billing_expert' and 'payments_expert' (1 / 1)")
+    (proposal,) = propose([bounce], graph, config)
+    patched = apply_ops(config, list(proposal.ops))
+    payments = next(t for t in patched["tools"] if t["name"] == "payments_expert")
+    assert "billing_expert" not in payments["instructions"]
+    assert payments["instructions"].startswith("Payments.")
+    fixed = build_graph(patched, "t", "t.hocon")
+    for rule_id in ("topology/dangling-reference", "topology/cycle-risk"):
+        assert list(registry.get(rule_id).check(fixed, LintConfig())) == []

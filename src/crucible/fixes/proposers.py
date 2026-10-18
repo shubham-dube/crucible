@@ -49,6 +49,13 @@ def _proposal(finding: Finding, rationale: str, ops: list[PatchOp], manual: bool
     )
 
 
+_SENTENCE = re.compile(r"(?<=[.!?])\s+")
+OWN_SCOPE = (
+    "Answer within your own responsibility using only the tools you have. Never claim to have consulted another "
+    "team or agent; if something outside your scope is needed, say so in your answer."
+)
+
+
 def _pair(finding: Finding, graph: NetworkGraph) -> tuple[str, str] | None:
     names = [n for n in re.findall(r"'([^']+)'", finding.message) if n in graph.nodes]
     if len(names) >= 2:
@@ -56,7 +63,7 @@ def _pair(finding: Finding, graph: NetworkGraph) -> tuple[str, str] | None:
     return None
 
 
-@proposer("trace/ping-pong", "topology/cycle-risk")
+@proposer("trace/ping-pong", "trace/bounce", "topology/cycle-risk")
 def break_cycle(finding: Finding, graph: NetworkGraph, config: dict[str, Any]) -> FixProposal | None:
     """Remove the back-edge of a two-agent cycle (keep the edge from the shallower / first agent)."""
     pair = _pair(finding, graph)
@@ -66,18 +73,19 @@ def break_cycle(finding: Finding, graph: NetworkGraph, config: dict[str, Any]) -
     keep_src, drop_src = sorted(pair, key=lambda a: (depths.get(a, 99), a))
     if keep_src not in graph.children(drop_src):
         return None
+    # Removing the edge alone is not enough: if the instructions still say "consult X", a live model pretends to
+    # (and invents X's answer). Drop those sentences and do not name X in the added guidance.
+    instructions = graph.nodes[drop_src].instructions
+    kept = [s for s in _SENTENCE.split(instructions) if not re.search(rf"(?<![\w-]){re.escape(keep_src)}(?![\w-])", s)]
+    ops = [PatchOp(op=PatchOpKind.REMOVE_TOOL, agent=drop_src, key=keep_src)]
+    if len(kept) != len(_SENTENCE.split(instructions)):
+        ops.append(PatchOp(op=PatchOpKind.SET_INSTRUCTIONS, agent=drop_src, value=" ".join(kept).strip()))
+    ops.append(PatchOp(op=PatchOpKind.APPEND_INSTRUCTIONS, agent=drop_src, value=OWN_SCOPE))
     return _proposal(
         finding,
-        f"'{drop_src}' and '{keep_src}' delegate to each other. Remove the back-edge {drop_src} -> {keep_src} and "
-        f"tell '{drop_src}' to answer within its own scope.",
-        [
-            PatchOp(op=PatchOpKind.REMOVE_TOOL, agent=drop_src, key=keep_src),
-            PatchOp(
-                op=PatchOpKind.APPEND_INSTRUCTIONS,
-                agent=drop_src,
-                value=f"Answer within your own responsibility. Never hand the task back to {keep_src}.",
-            ),
-        ],
+        f"'{drop_src}' and '{keep_src}' delegate to each other. Remove the back-edge {drop_src} -> {keep_src}, drop "
+        f"the instructions that send '{drop_src}' to '{keep_src}', and tell it to answer within its own scope.",
+        ops,
     )
 
 

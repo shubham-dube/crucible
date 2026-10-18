@@ -112,3 +112,14 @@ def test_findings_carry_location() -> None:
     finding = next(iter(registry.get("topology/unreachable-agent").check(g, CFG)))
     assert finding.location.file == "test.hocon"
     assert finding.location.json_path == "tools[2]"
+
+
+def test_dangling_reference_flags_identifier_names_only() -> None:
+    graph = make_graph(
+        agent("desk", tools=["billing_expert", "payments_expert", "forecast"]),
+        agent("billing_expert", tools=["payments_expert"], instructions="Ask payments_expert about refunds."),
+        agent("payments_expert", instructions="Always consult billing_expert first. Mention the forecast."),
+        agent("forecast", **{"class": "f.F"}),
+        **LIMITS,
+    )
+    assert ids("topology/dangling-reference", graph) == ["payments_expert"]
