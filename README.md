@@ -23,6 +23,8 @@ and proposes fixes it has **verified by re-running**.
 | **Surfaces** | CLI · GitHub Action · REST+SSE API · Next.js dashboard · MCP tool (served by Neuro-SAN) |
 
 **Benchmark (bug zoo, keyless):** recall **100%**, precision **100%** — see [docs/eval/benchmark.md](docs/eval/benchmark.md).
+**Live (real Gemini models, 3 reps):** recall **100%**, precision **100%** after fixing six defects that only real models
+exposed, for ≈ ₹26 total — see [docs/eval/live.md](docs/eval/live.md) for what worked, what broke and the caveats.
 
 ## Quick start
 ```bash
@@ -33,7 +35,14 @@ uv run crucible fix examples/targets -t support_loop               # verified fi
 uv run crucible audit examples/targets -t fragile_weather --agentic --scripted   # Crucible's own agents
 uv run crucible bench                                              # Crucible scored against ground truth
 ```
-Live LLMs: put `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` in `.env` and drop `--scripted`. Everything else runs keyless.
+Live LLMs: put `GOOGLE_API_KEY` (or `ANTHROPIC_API_KEY`) in `.env`, install extras (`uv sync --all-extras`) and set a
+budget (`CRUCIBLE_LLM_BUDGET_USD=0.5`):
+```bash
+uv run crucible bench examples/live_targets -n 3 --save                       # real targets, scored
+uv run crucible --target-llm gemini:gemini-3.5-flash-lite audit examples/targets -t clean_concierge   # any network on any model
+uv run crucible --agent-llm gemini:gemini-3.8-flash audit examples/live_targets -t account_leak --agentic
+```
+Step-by-step checks with expected output: [docs/guides/manual-testing.md](docs/guides/manual-testing.md).
 
 Your own networks: add a `crucible.yaml` next to them (see [examples/targets/crucible.yaml](examples/targets/crucible.yaml)).
 

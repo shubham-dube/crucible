@@ -73,5 +73,11 @@ Raw target sly_data and canaries never enter Crucible's own LLM prompts; agents 
 7. Fix loop on selected findings → verified `FixProposal[]`.
 8. Reporters → Markdown / JSON / SARIF / JUnit; persisted run.
 
+## Live models and spend (M15, ADR 0004)
+- `--target-llm` / `--agent-llm` swap any network's `llm_config` (top-level + per agent) into a parsed copy; the hook is
+  `Project.network_path`, so every surface inherits it.
+- Every LLM call is priced (`integrations/neurosan/pricing.py`, Neuro-SAN's price table, captured via `on_llm_end`);
+  the Runner checks a `BudgetGuard` before each run and charges a cumulative ledger after it.
+
 ## Deployment (service mode, M11+)
 API (FastAPI) + worker (job queue) + Postgres + artifact store (fs/S3) + web (Next.js). Target coded tools run inside the worker sandbox. Docker Compose for local/prod-like deploy.
