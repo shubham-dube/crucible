@@ -1,11 +1,13 @@
 // Server-side proxy to the Crucible API: the API key stays on the server and SSE streams pass through untouched.
-const API_URL = process.env.CRUCIBLE_API_URL ?? "http://127.0.0.1:8765";
+// On Vercel, CRUCIBLE_API_URL is injected by the `api` service binding (see vercel.json); read at request time.
+const apiBase = (): string => process.env.CRUCIBLE_API_URL ?? "http://127.0.0.1:8765";
 const API_KEY = process.env.CRUCIBLE_API_KEY ?? "";
 
 async function forward(request: Request, ctx: RouteContext<"/api/crucible/[...path]">): Promise<Response> {
   const { path } = await ctx.params;
   const incoming = new URL(request.url);
-  const target = `${API_URL}/v1/${path.map(encodeURIComponent).join("/")}${incoming.search}`;
+  const base = apiBase().replace(/\/?$/, "/");
+  const target = new URL(`v1/${path.map(encodeURIComponent).join("/")}${incoming.search}`, base);
   const headers = new Headers({ accept: request.headers.get("accept") ?? "application/json" });
   if (API_KEY) headers.set("x-api-key", API_KEY);
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
